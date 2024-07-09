@@ -45,8 +45,8 @@ void setup() {
 }
 
 void loop() {
-  Serial.print(F("Lux: ")); Serial.println(veml.readLux());
-  Serial.print(F("White: ")); Serial.println(veml.readWhite());
+  //Serial.print(F("Lux: ")); Serial.println(veml.readLux());
+ // Serial.print(F("White: ")); Serial.println(veml.readWhite());
   Serial.print(F("Raw Ambient Light Sensing: ")); Serial.println(veml.readALS());
   
   if(veml.readALS()<=3000){

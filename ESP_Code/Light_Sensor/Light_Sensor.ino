@@ -2,14 +2,17 @@
 #include <Adafruit_VEML7700.h>
 
 Adafruit_VEML7700 veml = Adafruit_VEML7700();
+const int diodePin = 5;
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) {
-    delay(10);
+    delay(1000);
   }
 
+  pinMode(diodePin, OUTPUT);  // Set the GPIO pin as an output
   Serial.println("Adafruit VEML7700 Test");
+
 
   // Initialize I2C communication
   if (!veml.begin()) {
@@ -45,6 +48,10 @@ void loop() {
   Serial.print(F("Lux: ")); Serial.println(veml.readLux());
   Serial.print(F("White: ")); Serial.println(veml.readWhite());
   Serial.print(F("Raw Ambient Light Sensing: ")); Serial.println(veml.readALS());
+  
+  if(veml.readALS()<=3000){
+  digitalWrite(diodePin, HIGH);  // Turn the diode on
+  }
+else digitalWrite(diodePin, LOW);   // Turn the diode off
 
-  delay(1000);
 }

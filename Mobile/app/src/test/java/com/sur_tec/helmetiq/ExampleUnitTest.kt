@@ -1,4 +1,4 @@
-package com.example.helmetiq
+package com.sur_tec.helmetiq
 
 import org.junit.Test
 

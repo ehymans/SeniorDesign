@@ -104,15 +104,14 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) 
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Button(
-                modifier = Modifier.background(Color.Cyan),
+
                 onClick = { navController.navigate("default") }
 
             ) {
                 Text("Home")
             }
             Button(
-                onClick = { navController.navigate("contacts") },
-                modifier = Modifier.background(Color.Cyan)
+                onClick = { navController.navigate("contacts") }
 
             ) {
                 Text("SOS Contacts")

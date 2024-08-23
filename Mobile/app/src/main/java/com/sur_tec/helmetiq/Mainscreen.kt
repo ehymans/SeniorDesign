@@ -32,10 +32,12 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) 
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
+
         Text(
             text = "HelmetIQ",
             fontSize = 24.sp,
-            color = Color.Gray
+            color = Color.Gray,
+            modifier = Modifier.padding(0.dp,50.dp)
         )
 
         Column(
@@ -48,7 +50,7 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) 
             //modifier = Modifier.size(120.dp),
             // contentScale = ContentScale.Fit
             //)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             // Battery and Bluetooth Icons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -105,17 +107,21 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) 
         ) {
             Button(
 
-                onClick = { navController.navigate("default") }
+                onClick = { navController.navigate("default") },
+                modifier = Modifier.padding(0.dp,6.dp)
 
             ) {
                 Text("Home")
             }
             Button(
-                onClick = { navController.navigate("contacts") }
+                onClick = { navController.navigate("contacts")},
+                modifier = Modifier.padding(0.dp,6.dp)
+
 
             ) {
                 Text("SOS Contacts")
             }
+
         }
     }
 }

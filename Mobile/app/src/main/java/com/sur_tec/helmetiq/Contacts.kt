@@ -44,7 +44,8 @@ fun Header() {
     Text(
         text = "Emergency Contacts",
         fontSize = 24.sp,
-        color = Color.Gray
+        color = Color.Gray,
+        modifier = Modifier.padding(0.dp,50.dp)
     )
 }
 
@@ -149,13 +150,14 @@ fun BottomNavigation(navController: NavHostController) {
     ) {
         Button(
             onClick = { navController.navigate("default") },
-            modifier = Modifier.background(Color.Cyan)
+            modifier = Modifier.padding(0.dp,6.dp)
         ) {
             Text("Home")
         }
         Button(
             onClick = { navController.navigate("contacts") },
-            modifier = Modifier.background(Color.Cyan)
+            modifier = Modifier.padding(0.dp,6.dp)
+
         ) {
             Text("SOS Contacts")
         }

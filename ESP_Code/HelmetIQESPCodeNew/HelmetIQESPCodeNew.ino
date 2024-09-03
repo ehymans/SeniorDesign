@@ -28,6 +28,7 @@ bool flash = false;              // Variable to toggle hazard flashing state
 #include <BluetoothSerial.h>
 #include <esp_sleep.h>
 #include <esp_system.h> // Library for system reset
+#include <ArduinoJson.h> // Library for JSON handling
 
 // Bluetooth Serial object
 BluetoothSerial BTSerial;
@@ -160,18 +161,28 @@ void handleCollision() {
 }
 
 void handleBlinkers() {
-  // Control the left blinker light
-  if (leftBlinkerOn) {
-    digitalWrite(leftBlinkerPin, HIGH);
-  } else {
-    digitalWrite(leftBlinkerPin, LOW);
-  }
+  static unsigned long previousMillis = 0; // Store the last time the blinkers were updated
+  const unsigned long interval = 500; // Blink interval in milliseconds
 
-  // Control the right blinker light
-  if (rightBlinkerOn) {
-    digitalWrite(rightBlinkerPin, HIGH);
-  } else {
-    digitalWrite(rightBlinkerPin, LOW);
+  unsigned long currentMillis = millis(); // Get the current time
+
+  if (currentMillis - previousMillis >= interval) {
+    // Save the last time the blink state was toggled
+    previousMillis = currentMillis;
+
+    // Toggle the left blinker light
+    if (leftBlinkerOn) {
+      digitalWrite(leftBlinkerPin, !digitalRead(leftBlinkerPin)); // Toggle state
+    } else {
+      digitalWrite(leftBlinkerPin, LOW); // Ensure it is off if not blinking
+    }
+
+    // Toggle the right blinker light
+    if (rightBlinkerOn) {
+      digitalWrite(rightBlinkerPin, !digitalRead(rightBlinkerPin)); // Toggle state
+    } else {
+      digitalWrite(rightBlinkerPin, LOW); // Ensure it is off if not blinking
+    }
   }
 }
 
@@ -189,9 +200,15 @@ void adjustTaillightBrightness() {
 }
 
 void sendSensorData(sensors_event_t a, sensors_event_t g) {
-  BTSerial.print("Acceleration Z: ");
-  BTSerial.println(a.acceleration.z);
+  // Create a JSON object
+  StaticJsonDocument<200> jsonDoc;
+  jsonDoc["acceleration_z"] = a.acceleration.z;
+  jsonDoc["gyro_z"] = g.gyro.z;
 
-  BTSerial.print("Gyroscope Z: ");
-  BTSerial.println(g.gyro.z);
+  // Convert JSON object to string
+  String jsonString;
+  serializeJson(jsonDoc, jsonString);
+
+  // Send JSON string via Bluetooth
+  BTSerial.println(jsonString);
 }

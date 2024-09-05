@@ -1,214 +1,149 @@
-// HelmetIQ System Code for ESP32 with Blinker Lights Controlled by Touch Sensors
-// This code integrates dynamic brake light control, touch sensor-controlled blinkers, collision detection, and Bluetooth communication
-// All pin assignments are declared as global variables for easy mapping to a custom PCB
-
-// Global Pin Assignments
-int brakeLightPin = 25;          // Pin for controlling brake lights (used as tail lights when it's dark)
-int headlightPin = 26;           // Pin for controlling headlight (should not flash during hazard mode)
-int leftBlinkerPin = 13;         // Pin for left blinker light
-int rightBlinkerPin = 12;        // Pin for right blinker light
-int leftTouchSensorPin = 14;     // Pin for left touch sensor (TTP223)
-int rightTouchSensorPin = 27;    // Pin for right touch sensor (TTP223)
-int lightSensorPin = 32;         // Pin for VEML7700 light sensor
-int mpu6050SDA = 21;             // SDA pin for MPU6050
-int mpu6050SCL = 22;             // SCL pin for MPU6050
-int tca9548aSDA = 33;            // SDA pin for TCA9548A I2C multiplexer
-int tca9548aSCL = 34;            // SCL pin for TCA9548A I2C multiplexer
-
-bool leftBlinkerOn = false;      // Variable to toggle left blinker
-bool rightBlinkerOn = false;     // Variable to toggle right blinker
-bool flash = false;              // Variable to toggle hazard flashing state
-
-// Include necessary libraries
 #include <Wire.h>
-#include <Adafruit_DRV2605.h>
-#include <Adafruit_MPU6050.h>
 #include <Adafruit_VEML7700.h>
-#include <TCA9548A.h>
-#include <BluetoothSerial.h>
-#include <esp_sleep.h>
-#include <esp_system.h> // Library for system reset
-#include <ArduinoJson.h> // Library for JSON handling
 
-// Bluetooth Serial object
-BluetoothSerial BTSerial;
+// Define pins for touch sensors and LEDs (blinkers)
+const int leftTouchPin = 2;   // Left touch sensor
+const int rightTouchPin = 15; // Right touch sensor
+const int leftLedPin = 19;    // Left blinker LED
+const int rightLedPin = 5;    // Right blinker LED
 
-// Sensor and driver objects
-Adafruit_MPU6050 mpu;
+// Define pins for the headlight and tail light
+const int headlightPin = 23;  // LED headlight
+const int tailLightPin = 18;  // LED tail light
+
+// PWM settings for the tail light
+const int pwmFrequency = 5000; // PWM frequency
+const int pwmResolution = 8;   // 8-bit resolution (0-255 for duty cycle)
+
+// Flash state variables for blinkers
+volatile bool leftFlash = false;
+volatile bool rightFlash = false;
+
+// Last time touch sensors were triggered (for debouncing)
+volatile unsigned long lastLeftInterruptTime = 0;
+volatile unsigned long lastRightInterruptTime = 0;
+const unsigned long debounceDelay = 300;  // 300ms debounce delay
+
+// Initialize VEML7700 object for the light sensor
 Adafruit_VEML7700 veml = Adafruit_VEML7700();
-Adafruit_DRV2605 drv;
-TCA9548A tca;
 
-volatile bool collisionDetected = false;  // Collision detection flag
-volatile bool brakeLightsOn = false;      // Brake light state flag
-volatile bool hapticTouchDetected = false;// Haptic touch detection flag
-
-unsigned long hapticTouchStartTime = 0;   // Variable to track the time haptic sensor is held
-
-void IRAM_ATTR onBrakeLightInterrupt() {
-  brakeLightsOn = true;
-}
-
-void IRAM_ATTR onCollisionInterrupt() {
-  collisionDetected = true;
-}
-
-void IRAM_ATTR onLeftTouchInterrupt() {
-  leftBlinkerOn = !leftBlinkerOn;  // Toggle the left blinker state
-}
-
-void IRAM_ATTR onRightTouchInterrupt() {
-  rightBlinkerOn = !rightBlinkerOn;  // Toggle the right blinker state
-}
+// Function declarations
+void handleBlinkers();
+void blinkLED(int pin);
+void delayWithSensorCheck(int delayTime);
+void handleHeadlightAndTailLight();
+void IRAM_ATTR leftTouchISR();
+void IRAM_ATTR rightTouchISR();
 
 void setup() {
+  // Initialize the LED pins for blinkers as output
+  pinMode(leftLedPin, OUTPUT);
+  pinMode(rightLedPin, OUTPUT);
+
+  // Initialize the LED pins for the headlight as output
+  pinMode(headlightPin, OUTPUT);
+
+  // Initialize PWM for the tail light
+  ledcAttach(tailLightPin, pwmFrequency, pwmResolution);  // Use new API to attach pin and set frequency/resolution
+
+  // Start serial communication for debugging
   Serial.begin(115200);
-  BTSerial.begin("HelmetIQ");
 
-  // Initialize I2C communication
-  Wire.begin(tca9548aSDA, tca9548aSCL);
-
-  // Initialize MPU6050
-  if (!mpu.begin()) {
-    Serial.println("Failed to find MPU6050 chip");
-    while (1) {
-      delay(10);
-    }
-  }
-  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-
-  // Initialize VEML7700 light sensor
+  // Initialize I2C communication with the VEML7700 sensor
   if (!veml.begin()) {
-    Serial.println("Failed to initialize VEML7700 light sensor");
+    Serial.println("VEML7700 not found");
     while (1);
   }
 
+  // Set initial VEML7700 sensor parameters
   veml.setGain(VEML7700_GAIN_1);
-  veml.setIntegrationTime(VEML7700_IT_800MS);
+  veml.setIntegrationTime(VEML7700_IT_100MS);
+  veml.powerSaveEnable(true);
 
-  // Initialize DRV2605L haptic driver
-  drv.begin();
-  drv.selectLibrary(1);
-  drv.setMode(DRV2605_MODE_INTTRIG);
+  // Attach hardware interrupts for touch sensors
+  attachInterrupt(digitalPinToInterrupt(leftTouchPin), leftTouchISR, CHANGE);  // Trigger on any change
+  attachInterrupt(digitalPinToInterrupt(rightTouchPin), rightTouchISR, CHANGE);  // Trigger on any change
 
-  // Initialize pins
-  pinMode(brakeLightPin, OUTPUT);
-  pinMode(headlightPin, OUTPUT);
-  pinMode(leftBlinkerPin, OUTPUT);
-  pinMode(rightBlinkerPin, OUTPUT);
-  pinMode(leftTouchSensorPin, INPUT);
-  pinMode(rightTouchSensorPin, INPUT);
-
-  // Attach interrupts to the touch sensor pins
-  attachInterrupt(digitalPinToInterrupt(leftTouchSensorPin), onLeftTouchInterrupt, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(rightTouchSensorPin), onRightTouchInterrupt, CHANGE);
-
-  // Set the ESP32 to wake up on interrupts from the touch sensors
-  esp_sleep_enable_ext1_wakeup(GPIO_NUM_14 | GPIO_NUM_27, ESP_EXT1_WAKEUP_ANY_HIGH);
+  Serial.println("System initialized.");
 }
 
 void loop() {
-  // Enter deep sleep mode until an interrupt is triggered
-  esp_light_sleep_start();
-
-  // Get accelerometer and gyro data
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-
-  // Check if we should activate the brake light based on acceleration
-  handleBrakeLight(a.acceleration.z);
-
-  // Handle collision detection
-  if (collisionDetected) {
-    collisionDetected = false;
-    handleCollision();
-  }
-
-  // Handle blinker lights based on touch sensor input
+  // Handle blinker logic
   handleBlinkers();
 
-  // Adjust taillight brightness based on ambient light
-  adjustTaillightBrightness();
-
-  // Send sensor data via Bluetooth
-  sendSensorData(a, g);
+  // Handle headlight and tail light logic based on the light sensor
+  handleHeadlightAndTailLight();
 }
 
-void handleBrakeLight(float zAccel) {
-  if (zAccel < -1.5) {  // Deceleration threshold
-    // Turn on brake light (you can adjust the brightness using PWM)
-    analogWrite(brakeLightPin, 255); // Full brightness
-  } else {
-    // Turn off brake light or dim it for taillight mode
-    adjustTaillightBrightness(); // Adjust based on ambient light
+// ISR for left touch sensor
+void IRAM_ATTR leftTouchISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastLeftInterruptTime > debounceDelay) {
+    leftFlash = !leftFlash;
+    Serial.println("Left blinker toggled");
+    lastLeftInterruptTime = currentTime;
   }
 }
 
-void handleCollision() {
-  // Flash all lights except the headlight as hazard lights
-  for (int i = 0; i < 10; i++) { // Flash 10 times
-    digitalWrite(brakeLightPin, HIGH);
-    digitalWrite(leftBlinkerPin, HIGH);
-    digitalWrite(rightBlinkerPin, HIGH);
-    delay(200);
-    digitalWrite(brakeLightPin, LOW);
-    digitalWrite(leftBlinkerPin, LOW);
-    digitalWrite(rightBlinkerPin, LOW);
-    delay(200);
+// ISR for right touch sensor
+void IRAM_ATTR rightTouchISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastRightInterruptTime > debounceDelay) {
+    rightFlash = !rightFlash;
+    Serial.println("Right blinker toggled");
+    lastRightInterruptTime = currentTime;
   }
 }
 
 void handleBlinkers() {
-  static unsigned long previousMillis = 0; // Store the last time the blinkers were updated
-  const unsigned long interval = 500; // Blink interval in milliseconds
+  // If leftFlash is true, blink the left LED
+  if (leftFlash) {
+    Serial.println("Left blinker ON");
+    blinkLED(leftLedPin);
+  }
 
-  unsigned long currentMillis = millis(); // Get the current time
-
-  if (currentMillis - previousMillis >= interval) {
-    // Save the last time the blink state was toggled
-    previousMillis = currentMillis;
-
-    // Toggle the left blinker light
-    if (leftBlinkerOn) {
-      digitalWrite(leftBlinkerPin, !digitalRead(leftBlinkerPin)); // Toggle state
-    } else {
-      digitalWrite(leftBlinkerPin, LOW); // Ensure it is off if not blinking
-    }
-
-    // Toggle the right blinker light
-    if (rightBlinkerOn) {
-      digitalWrite(rightBlinkerPin, !digitalRead(rightBlinkerPin)); // Toggle state
-    } else {
-      digitalWrite(rightBlinkerPin, LOW); // Ensure it is off if not blinking
-    }
+  // If rightFlash is true, blink the right LED
+  if (rightFlash) {
+    Serial.println("Right blinker ON");
+    blinkLED(rightLedPin);
   }
 }
 
-void adjustTaillightBrightness() {
-  // Function to adjust the taillight brightness based on ambient light levels
-  uint16_t als = veml.readALS(); // Read the ambient light level
+void blinkLED(int pin) {
+  digitalWrite(pin, HIGH);
+  delayWithSensorCheck(200);  // Reduced delay for faster blinking
+  digitalWrite(pin, LOW);
+  delayWithSensorCheck(200);  // Reduced delay for faster blinking
+}
 
-  if (als <= 3000) {
-    // It's dark, so use lower intensity for taillights
-    analogWrite(brakeLightPin, 128); // 50% brightness for taillights
+void delayWithSensorCheck(int delayTime) {
+  int elapsedTime = 0;
+  while (elapsedTime < delayTime) {
+    delay(5); // Small delay to allow other operations
+    elapsedTime += 5;
+  }
+}
+
+void handleHeadlightAndTailLight() {
+  // Read the ambient light from the VEML7700 sensor
+  float lux = veml.readLux();
+  Serial.print("Ambient Light (lux): ");
+  Serial.println(lux);
+
+  // Set a threshold for low light to turn on the headlight and tail light
+  if (lux < 50.0) {  // Adjust threshold as needed
+    digitalWrite(headlightPin, HIGH);  // Turn on headlight
+
+    // Set the tail light to 50% brightness using PWM
+    ledcWrite(tailLightPin, 50);  // 20% duty cycle (50 out of 255)
+    Serial.println("Headlight ON and tail light at 50% brightness");
   } else {
-    // It's bright, so turn off the taillights
-    analogWrite(brakeLightPin, 0); // Lights off
+    digitalWrite(headlightPin, LOW);   // Turn off headlight
+
+    // Turn off the tail light
+    ledcWrite(tailLightPin, 0);  // 0% duty cycle (tail light off)
+    Serial.println("Headlight and tail light OFF");
   }
-}
 
-void sendSensorData(sensors_event_t a, sensors_event_t g) {
-  // Create a JSON object
-  StaticJsonDocument<200> jsonDoc;
-  jsonDoc["acceleration_z"] = a.acceleration.z;
-  jsonDoc["gyro_z"] = g.gyro.z;
-
-  // Convert JSON object to string
-  String jsonString;
-  serializeJson(jsonDoc, jsonString);
-
-  // Send JSON string via Bluetooth
-  BTSerial.println(jsonString);
+  delay(500);  // Wait for 1 second before checking again
 }

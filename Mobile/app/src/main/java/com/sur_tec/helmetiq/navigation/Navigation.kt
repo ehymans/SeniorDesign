@@ -11,7 +11,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -22,6 +25,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sur_tec.helmetiq.Contacts
 import com.sur_tec.helmetiq.Mainscreen
+import com.sur_tec.helmetiq.map.MapScreen
 import com.sur_tec.helmetiq.navigation.BottomNavItem
 import com.sur_tec.helmetiq.navigation.Screens
 
@@ -29,12 +33,27 @@ import com.sur_tec.helmetiq.navigation.Screens
 @Composable
 fun HelmetIQNavigation() {
     val navController = rememberNavController()
+    val bottomBarState = rememberSaveable { (mutableStateOf(true)) }
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+
+    // Update bottom bar visibility based on current route
+    LaunchedEffect(navBackStackEntry?.destination?.route) {
+        bottomBarState.value = when (navBackStackEntry?.destination?.route) {
+            Screens.MAINSCREEN.name,
+            Screens.CONTACTSSCREEN.name -> true
+            Screens.MAPSCREEN.name -> false
+            else -> true
+        }
+    }
 
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(navController = navController as NavHostController)
+            if (bottomBarState.value){
+                BottomNavigationBar(navController = navController as NavHostController,bottomBarState = bottomBarState.value)
+            }
         }
-    ) {padding ->
+    ) { padding ->
         NavHost(navController = navController, startDestination = Screens.MAINSCREEN.name) {
             composable(Screens.MAINSCREEN.name) {
                 Mainscreen(navController = navController, modifier = Modifier.padding(padding))
@@ -42,12 +61,16 @@ fun HelmetIQNavigation() {
             composable(Screens.CONTACTSSCREEN.name) {
                 Contacts(navController = navController, modifier = Modifier.padding(padding))
             }
+            composable(Screens.MAPSCREEN.name) {
+                MapScreen(navController = navController) // Correctly calling the MapScreen composable
+
+            }
         }
     }
 }
 
 @Composable
-fun BottomNavigationBar(navController: NavHostController) {
+fun BottomNavigationBar(navController: NavHostController,bottomBarState : Boolean = true) {
     val items = listOf(
         BottomNavItem(
             route = Screens.MAINSCREEN.name,
@@ -63,7 +86,7 @@ fun BottomNavigationBar(navController: NavHostController) {
         )
     )
 
-    NavigationBar  {
+    NavigationBar {
         val currentRoute = currentRoute(navController)
         items.forEach { item ->
             NavigationBarItem(

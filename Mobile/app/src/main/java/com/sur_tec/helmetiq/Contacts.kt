@@ -4,10 +4,15 @@ import android.graphics.drawable.shapes.Shape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -16,10 +21,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -28,12 +38,18 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.sur_tec.helmetiq.navigation.Screens
 import com.sur_tec.helmetiq.ui.theme.Monnestraut
+import com.sur_tec.helmetiq.ui.theme.customColors
 
 @Composable
 fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
+
+    var switchState by rememberSaveable {
+        mutableStateOf(false)
+    }
     Column(
         modifier = modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -41,8 +57,11 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
         Header()
 
         // New Contact and SMS Toggle
-        NewContactAndSmsToggle()
+        NewContactAndSmsToggle(switchState) {
+            switchState = it
+        }
 
+        Spacer(modifier = Modifier.height(24.dp))
         // Contact List
         ContactList()
 
@@ -60,9 +79,9 @@ fun Header() {
     ) {
         Text(
             text = "Emergency Contacts",
-            fontSize = 28.sp,
+            fontSize = 24.sp,
             fontFamily = Monnestraut,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = customColors.primary,
             fontWeight = FontWeight.ExtraBold,
             fontStyle = FontStyle.Italic,
             modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp)
@@ -72,7 +91,7 @@ fun Header() {
 
 @Composable
 @Preview(showBackground = true)
-fun NewContactAndSmsToggle() {
+fun NewContactAndSmsToggle(switchState: Boolean = false, onCheckChanged: (Boolean) -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
@@ -81,14 +100,16 @@ fun NewContactAndSmsToggle() {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
+                .padding(12.dp)
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.primary)
                 .padding(vertical = 8.dp)
         ) {
             Text(
                 text = "New Emergency Contact",
                 fontSize = 18.sp,
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontFamily = Monnestraut,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
@@ -97,8 +118,8 @@ fun NewContactAndSmsToggle() {
             )
             CustomFloatingActionButton(
                 onClick = {},
-                backgroundColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
+                backgroundColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
                 shape = MaterialTheme.shapes.medium.copy(
                     all = CornerSize(60)
                 ),
@@ -117,10 +138,10 @@ fun NewContactAndSmsToggle() {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .padding(top = 8.dp)
+                .padding(top = 12.dp, start = 12.dp, end = 12.dp)
                 .fillMaxWidth()
-
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.primary)
                 .padding(vertical = 8.dp)
         ) {
             Text(
@@ -128,15 +149,17 @@ fun NewContactAndSmsToggle() {
                 fontSize = 18.sp,
                 fontFamily = Monnestraut,
                 fontWeight = FontWeight.Medium,
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 12.dp)
             )
             Switch(
-                checked = false, // Replace with actual state
-                onCheckedChange = { /* TODO: Toggle SMS feature */ },
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.Gray),
+                checked = switchState, // Replace with actual state
+                onCheckedChange = {
+                    onCheckChanged(it)
+                },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.Cyan),
                 modifier = Modifier.padding(end = 12.dp)
             )
         }
@@ -161,32 +184,39 @@ fun ContactList() {
 }
 
 @Composable
-fun ContactItem(name: String) {
+@Preview(showBackground = true)
+fun ContactItem(name: String = "salman") {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 8.dp)
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(vertical = 12.dp, horizontal = 12.dp)
             .clickable { /* TODO: Navigate to contact details */ }
     ) {
-        // Icon(
-        // painter = painterResource(id = R.drawable.ic_contact), // Replace with your contact icon resource
-        //  contentDescription = "Contact Icon",
-        //  tint = Color.Gray,
-        //  modifier = Modifier.size(24.dp)
-        // )
+        Icon(
+            imageVector = Icons.Default.Person, // Replace with your contact icon resource
+            contentDescription = "Contact Icon",
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(24.dp)
+        )
         Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = name,
             fontSize = 18.sp,
-            color = Color.Gray,
+            fontFamily = Monnestraut,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.weight(1f)
         )
-        //Icon(
-        // painter = painterResource(id = R.drawable.ic_arrow_forward), // Replace with your arrow icon resource
-        // contentDescription = "Go to Contact",
-        // tint = Color.Gray
-        //)
+        Icon(
+            imageVector = Icons.Default.ArrowForward, // Replace with your arrow icon resource
+            contentDescription = "Go to Contact",
+
+            tint = MaterialTheme.colorScheme.onPrimary
+        )
     }
 }
 
@@ -235,3 +265,12 @@ fun BottomNavigation(navController: @Composable NavHostController) {
         }
     }
 }*/
+
+
+@Composable
+@Preview(showBackground = true)
+fun PreviewfunNewContactAndSmsToggle() {
+    NewContactAndSmsToggle(false) {
+
+    }
+}

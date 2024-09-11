@@ -82,7 +82,7 @@ fun BottomNavigationBar(navController: NavHostController,bottomBarState : Boolea
             route = Screens.CONTACTSSCREEN.name,
             selectedIcon = Icons.Filled.Call,
             unSelectedIcon = Icons.Outlined.Call,
-            label = "Contact"
+            label = "Emergency Contacts"
         )
     )
 

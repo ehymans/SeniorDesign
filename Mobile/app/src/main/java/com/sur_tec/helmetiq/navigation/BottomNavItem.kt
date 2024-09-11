@@ -20,7 +20,7 @@ val bottonNavItems = listOf(
         Screens.CONTACTSSCREEN.name,
         Icons.Filled.Call,
         Icons.Outlined.Call,
-        "Contact"
+        "Emergency"
     )
 )
 

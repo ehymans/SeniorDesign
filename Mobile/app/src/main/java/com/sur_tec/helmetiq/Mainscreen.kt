@@ -131,13 +131,13 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) 
                 Icon(
                     painter = painterResource(id = R.drawable.ic_battery),
                     contentDescription = "Battery",
-                    tint = MaterialTheme.colorScheme.primary,  // Use a bold primary color
+                    tint = MaterialTheme.colorScheme.secondary,  // Use a bold primary color
                     modifier = Modifier.size(40.dp)  // Larger icon size
                 )
                 Icon(
                     painter = painterResource(id = R.drawable.ic_bluetooth),
                     contentDescription = "Bluetooth",
-                    tint = MaterialTheme.colorScheme.secondary,  // Use a contrasting color
+                    tint = MaterialTheme.colorScheme.primary,  // Use a contrasting color
                     modifier = Modifier.size(40.dp)  // Larger icon size
                 )
             }
@@ -240,8 +240,10 @@ private fun HeadLight(switchState: Boolean = false, onSwitchChanged: (Boolean) -
             checked = switchState,
             onCheckedChange = onSwitchChanged,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Cyan,
-                uncheckedThumbColor = customColors.inversePrimary
+                checkedThumbColor = Color.Cyan, // Thumb color when switch is ON
+                uncheckedThumbColor = Color.Gray, // Thumb color when switch is OFF
+                checkedTrackColor = Color.DarkGray, // Track color when switch is ON
+                uncheckedTrackColor = Color.LightGray, // Track color when switch is OFF
             )
         )
     }
@@ -273,7 +275,7 @@ private fun HeaderTitle() {
             fontStyle = FontStyle.Italic,
             fontWeight = FontWeight.Black, // Use heavy, bold font for modern design
             fontFamily = FontFamily.SansSerif, // Switch to modern sans-serif fonts
-            color = customColors.primary,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp, start = 12.dp)
 
         )

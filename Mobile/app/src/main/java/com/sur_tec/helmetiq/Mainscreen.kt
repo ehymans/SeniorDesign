@@ -148,24 +148,30 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) 
             }
         }
 
-        // Placeholder for Map, replace with an actual map implementation
+        // modified map layout 9/16/24
         Box(
             modifier = Modifier
+                .padding(horizontal = 12.dp)
                 .fillMaxWidth()
                 .height(180.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .shadow(4.dp)
                 .clickable {
                     navController.navigate(Screens.MAPSCREEN.name)
                 },
         ) {
-            if (locationPermissionState.status.isGranted) {
+            if (locationPermissionState.status.isGranted)
+            {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
-                    cameraPositionState,
+                    cameraPositionState = cameraPositionState,
                     onMapLoaded = {
                         Toast.makeText(context, "map loaded", Toast.LENGTH_SHORT).show()
                     }
                 )
-            } else {
+            }
+            else
+            {
                 Text(text = "Location permission required", modifier = Modifier.fillMaxSize())
 
             }

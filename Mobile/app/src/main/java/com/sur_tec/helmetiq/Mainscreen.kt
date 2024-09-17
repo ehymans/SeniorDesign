@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,7 +62,7 @@ import com.sur_tec.helmetiq.ui.theme.customColors
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 
-fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) {
+fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,onBluetoothClick:()->Unit) {
 
     val context = LocalContext.current
     val locationPermissionState =
@@ -138,7 +139,10 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier) 
                     painter = painterResource(id = R.drawable.ic_bluetooth),
                     contentDescription = "Bluetooth",
                     tint = MaterialTheme.colorScheme.primary,  // Use a contrasting color
-                    modifier = Modifier.size(40.dp)  // Larger icon size
+                    modifier = Modifier.size(40.dp).clickable(
+                        indication = null, interactionSource = remember{ MutableInteractionSource() },
+                        onClick = {onBluetoothClick()}
+                    )  // Larger icon size
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -287,3 +291,4 @@ private fun HeaderTitle() {
         )
     }
 }
+

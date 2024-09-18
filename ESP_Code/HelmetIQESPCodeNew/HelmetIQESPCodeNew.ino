@@ -1,5 +1,7 @@
 #include <Wire.h>
 #include <Adafruit_VEML7700.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 
 // Define pins for touch sensors and LEDs (blinkers)
 const int leftTouchPin = 2;   // Left touch sensor
@@ -10,6 +12,7 @@ const int rightLedPin = 5;    // Right blinker LED
 // Define pins for the headlight and tail light
 const int headlightPin = 23;  // LED headlight
 const int tailLightPin = 18;  // LED tail light
+const int brakeLightPin = 18; // Brake light (same as tail light for simplicity)
 
 // PWM settings for the tail light
 const int pwmFrequency = 5000; // PWM frequency
@@ -27,6 +30,18 @@ const unsigned long debounceDelay = 600;  // 300ms debounce delay
 // Initialize VEML7700 object for the light sensor
 Adafruit_VEML7700 veml = Adafruit_VEML7700();
 
+// MPU6050 setup
+Adafruit_MPU6050 mpu;
+
+// Variables to store acceleration data
+float accelX = 0, accelY = 0, accelZ = 0;
+float prevAccelMagnitude = 0;  // To store the previous magnitude of acceleration
+
+// Thresholds for detecting deceleration
+const float decelThreshold = 0.5;  // Adjust this based on testing
+bool isDecelerating = false;
+unsigned long decelEndTime = 0;
+
 // Function declarations
 void handleBlinkers();
 void blinkLED(int pin);
@@ -34,7 +49,10 @@ void delayWithSensorCheck(int delayTime);
 void handleHeadlightAndTailLight();
 void IRAM_ATTR leftTouchISR();
 void IRAM_ATTR rightTouchISR();
+void blinkBrakeLight(int blinks);
+void handleDeceleration();
 
+// Setup function
 void setup() {
   // Initialize the LED pins for blinkers as output
   pinMode(leftLedPin, OUTPUT);
@@ -55,10 +73,19 @@ void setup() {
     while (1);
   }
 
-  // Set initial VEML7700 sensor parameters
+  // Initialize MPU6050
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1);
+  }
+  
+  // Set initial MPU6050 and VEML7700 sensor parameters
   veml.setGain(VEML7700_GAIN_1);
   veml.setIntegrationTime(VEML7700_IT_100MS);
   veml.powerSaveEnable(true);
+
+  // Set accelerometer range
+  mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
 
   // Attach hardware interrupts for touch sensors
   attachInterrupt(digitalPinToInterrupt(leftTouchPin), leftTouchISR, CHANGE);  // Trigger on any change
@@ -67,12 +94,16 @@ void setup() {
   Serial.println("System initialized.");
 }
 
+// Loop function
 void loop() {
   // Handle blinker logic
   handleBlinkers();
 
   // Handle headlight and tail light logic based on the light sensor
   handleHeadlightAndTailLight();
+
+  // Handle deceleration detection and brake light control
+  handleDeceleration();
 }
 
 // ISR for left touch sensor
@@ -124,7 +155,6 @@ void delayWithSensorCheck(int delayTime) {
   }
 }
 
-
 void handleHeadlightAndTailLight() {
   // Read the ambient light from the VEML7700 sensor
   float lux = veml.readLux();
@@ -147,4 +177,63 @@ void handleHeadlightAndTailLight() {
   }
 
   delay(900);  // Wait for 1 second before checking again
+}
+
+void handleDeceleration() {
+  // Read acceleration data from MPU6050
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  // Get acceleration values on X, Y, Z axes
+  accelX = a.acceleration.x;
+  accelY = a.acceleration.y;
+  accelZ = a.acceleration.z;
+
+  // Calculate the magnitude of the acceleration vector
+  float accelMagnitude = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+
+  // Print raw acceleration values
+  Serial.print("Accel X: "); Serial.print(accelX);
+  Serial.print(" Accel Y: "); Serial.print(accelY);
+  Serial.print(" Accel Z: "); Serial.println(accelZ);
+
+  // Print magnitude of the acceleration
+  Serial.print("Accel Magnitude: ");
+  Serial.println(accelMagnitude);
+
+  // Calculate the change in acceleration (delta) to detect deceleration
+  float accelDelta = prevAccelMagnitude - accelMagnitude;
+
+  // Print delta (change in acceleration magnitude)
+  Serial.print("Accel Delta: ");
+  Serial.println(accelDelta);
+
+  // Detect deceleration
+  if (accelDelta > decelThreshold) {  // Deceleration is detected
+    if (!isDecelerating) {
+      isDecelerating = true;
+      Serial.println("Deceleration detected, brake light ON");
+    }
+    ledcWrite(tailLightPin, 250);  // Turn on brake light during deceleration
+    decelEndTime = millis();  // Reset the deceleration end time
+  } else {
+    if (isDecelerating && millis() - decelEndTime > 500) {  // After deceleration stops
+      isDecelerating = false;
+      Serial.println("Deceleration stopped, extra blinks triggered");
+      blinkBrakeLight(2);  // Blink brake light twice after deceleration
+    }
+    ledcWrite(tailLightPin, 0);  // Turn off brake light when not decelerating
+  }
+
+  // Update the previous acceleration magnitude
+  prevAccelMagnitude = accelMagnitude;
+}
+
+void blinkBrakeLight(int blinks) {
+  for (int i = 0; i < blinks; i++) {
+    ledcWrite(tailLightPin, 250);
+    delay(200);  // Short blink duration
+    ledcWrite(tailLightPin, 50);;
+    delay(200);  // Short pause between blinks
+  }
 }

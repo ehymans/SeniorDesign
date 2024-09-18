@@ -22,7 +22,7 @@ volatile bool rightFlash = false;
 // Last time touch sensors were triggered (for debouncing)
 volatile unsigned long lastLeftInterruptTime = 0;
 volatile unsigned long lastRightInterruptTime = 0;
-const unsigned long debounceDelay = 300;  // 300ms debounce delay
+const unsigned long debounceDelay = 600;  // 300ms debounce delay
 
 // Initialize VEML7700 object for the light sensor
 Adafruit_VEML7700 veml = Adafruit_VEML7700();
@@ -117,12 +117,13 @@ void blinkLED(int pin) {
 }
 
 void delayWithSensorCheck(int delayTime) {
-  int elapsedTime = 0;
-  while (elapsedTime < delayTime) {
-    delay(5); // Small delay to allow other operations
-    elapsedTime += 5;
+  unsigned long startTime = millis();
+  while (millis() - startTime < delayTime) {
+    // Let the system remain responsive and check for sensor states
+    // Insert code here if needed to handle other tasks
   }
 }
+
 
 void handleHeadlightAndTailLight() {
   // Read the ambient light from the VEML7700 sensor
@@ -145,5 +146,5 @@ void handleHeadlightAndTailLight() {
     Serial.println("Headlight and tail light OFF");
   }
 
-  delay(500);  // Wait for 1 second before checking again
+  delay(900);  // Wait for 1 second before checking again
 }

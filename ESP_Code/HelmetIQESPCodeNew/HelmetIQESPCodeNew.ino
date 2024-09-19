@@ -27,6 +27,15 @@ volatile unsigned long lastLeftInterruptTime = 0;
 volatile unsigned long lastRightInterruptTime = 0;
 const unsigned long debounceDelay = 600;  // 300ms debounce delay
 
+// Threshold for collision detection
+const float collisionThreshold = 18;  // Adjust this based on testing for collision
+const float resumeMotionThreshold = 12;  // Threshold to exit hazard mode (when movement resumes)
+
+// Collision state variables
+bool inCollision = false;
+unsigned long collisionBlinkEndTime = 0;
+
+
 // Initialize VEML7700 object for the light sensor
 Adafruit_VEML7700 veml = Adafruit_VEML7700();
 
@@ -38,7 +47,7 @@ float accelX = 0, accelY = 0, accelZ = 0;
 float prevAccelMagnitude = 0;  // To store the previous magnitude of acceleration
 
 // Thresholds for detecting deceleration
-const float decelThreshold = 0.5;  // Adjust this based on testing
+const float decelThreshold = 0.3;  // Adjust this based on testing
 bool isDecelerating = false;
 unsigned long decelEndTime = 0;
 
@@ -94,7 +103,6 @@ void setup() {
   Serial.println("System initialized.");
 }
 
-// Loop function
 void loop() {
   // Handle blinker logic
   handleBlinkers();
@@ -104,7 +112,11 @@ void loop() {
 
   // Handle deceleration detection and brake light control
   handleDeceleration();
+
+  // Handle collision detection and hazard lights
+  handleCollisionDetection();
 }
+
 
 // ISR for left touch sensor
 void IRAM_ATTR leftTouchISR() {
@@ -179,6 +191,12 @@ void handleHeadlightAndTailLight() {
   delay(900);  // Wait for 1 second before checking again
 }
 
+// Define a minimum time to keep the brake light on (e.g., 1 second)
+const unsigned long brakeLightMinOnTime = 1000;  // 1000ms (1 second)
+
+// Store the time when the brake light was last turned on
+unsigned long brakeLightOnTime = 0;
+
 void handleDeceleration() {
   // Read acceleration data from MPU6050
   sensors_event_t a, g, temp;
@@ -213,24 +231,27 @@ void handleDeceleration() {
     if (!isDecelerating) {
       isDecelerating = true;
       Serial.println("Deceleration detected, brake light blinking ON");
+      blinkBrakeLight(10);  // Blink once per iteration while decelerating
     }
     
     // Blink brake light while decelerating
-    blinkBrakeLight(2);  // Blink once per iteration while decelerating
+    
     decelEndTime = millis();  // Reset the deceleration end time
   } else {
-    if (isDecelerating && millis() - decelEndTime > 500) {  // After deceleration stops
+    if (isDecelerating && millis() - decelEndTime > 200) {  // After deceleration stops
       isDecelerating = false;
       Serial.println("Deceleration stopped, extra blinks triggered");
       blinkBrakeLight(6);  // Blink brake light twice after deceleration stops
     }
     
-    ledcWrite(tailLightPin, 0);  // Turn off brake light after blinking
+    
   }
 
   // Update the previous acceleration magnitude
   prevAccelMagnitude = accelMagnitude;
 }
+
+
 
 void blinkBrakeLight(int blinks) {
   for (int i = 0; i < blinks; i++) {
@@ -238,5 +259,72 @@ void blinkBrakeLight(int blinks) {
     delay(100);  // Short blink duration
     ledcWrite(tailLightPin, 50);  // Dim to 50% brightness during pause
     delay(100);  // Short pause between blinks
+    ledcWrite(tailLightPin, 250);  // Full brightness
+  }
+}
+
+void blinkHazardLights(int blinks) {
+  for (int i = 0; i < blinks; i++) {
+    // Turn on all lights (headlight, tail light, both blinkers)
+    ledcWrite(tailLightPin, 250);  // Full brightness for tail light and brake light
+    digitalWrite(headlightPin, HIGH);
+    digitalWrite(leftLedPin, HIGH);
+    digitalWrite(rightLedPin, HIGH);
+    delay(600);  // Hazard blink duration
+
+    // Turn off all lights
+    ledcWrite(tailLightPin, 0);  // Turn off tail light
+    digitalWrite(headlightPin, LOW);
+    digitalWrite(leftLedPin, LOW);
+    digitalWrite(rightLedPin, LOW);
+    delay(600);  // Hazard blink off duration
+  }
+}
+
+void handleCollisionDetection() {
+  // Read accelerometer and gyroscope data from MPU6050
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+ // Get acceleration values on X, Y, Z axes
+  accelX = a.acceleration.x;
+  accelY = a.acceleration.y;
+  accelZ = a.acceleration.z;
+
+  // Calculate the magnitude of the acceleration vector
+  float accelMagnitude  = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+
+  // Get gyroscope magnitude (if you want to use it for detecting rotations or impacts)
+  float gyroMagnitude = sqrt(g.gyro.x * g.gyro.x + g.gyro.y * g.gyro.y + g.gyro.z * g.gyro.z);
+
+  // Debugging: Print raw acceleration and gyroscope magnitudes
+  Serial.print("COLLISION Accel Magnitude (XYZ): ");
+  Serial.println(accelMagnitude);
+  Serial.print("Gyro Magnitude: ");
+  Serial.println(gyroMagnitude);
+
+  // Detect collision (when X and Y acceleration or gyroscope breach the collision threshold)
+  if (accelMagnitude > collisionThreshold || gyroMagnitude > 5) {
+    if (!inCollision) {
+      Serial.println("Collision detected, hazard lights ON");
+      inCollision = true;  // Set the system to hazard mode
+    }
+
+    // Hazard lights: Blink all lights during collision
+    blinkHazardLights(3);  // Blink once per loop iteration
+    collisionBlinkEndTime = millis();  // Reset the blink timer
+    
+
+  } else if (inCollision && accelMagnitude > resumeMotionThreshold) {
+    // Exit hazard mode when significant motion is detected after collision
+    if (millis() - collisionBlinkEndTime > 500) {  // Small delay to ensure stable motion
+      inCollision = false;
+      Serial.println("Motion resumed after collision, hazard lights OFF");
+    }
+  }
+
+  // If still in hazard mode, keep lights blinking
+  if (inCollision) {
+    blinkHazardLights(1);
   }
 }

@@ -1,6 +1,7 @@
 package com.sur_tec.helmetiq
 
 import android.Manifest
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -27,6 +28,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
@@ -61,10 +64,23 @@ import com.sur_tec.helmetiq.ui.theme.customColors
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-
-fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,onBluetoothClick:()->Unit) {
+fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,bluetoothViewModel: BluetoothViewModel) {
 
     val context = LocalContext.current
+    val isConnected = bluetoothViewModel.isConnected.collectAsState() // Observing the connection state
+
+    // Initialize BluetoothManager
+    val bluetoothManager = remember { BluetoothManager(context) }
+
+    // Bluetooth permissions handling
+    val bluetoothPermissionState = rememberMultiplePermissionsState(
+        permissions = listOf(
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_ADMIN
+        )
+    )
+
     val locationPermissionState =
         rememberPermissionState(permission = Manifest.permission.ACCESS_FINE_LOCATION)
     val cameraPositionState = rememberCameraPositionState()
@@ -138,44 +154,70 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,o
                 Icon(
                     painter = painterResource(id = R.drawable.ic_bluetooth),
                     contentDescription = "Bluetooth",
-                    tint = MaterialTheme.colorScheme.primary,  // Use a contrasting color
-                    modifier = Modifier.size(40.dp).clickable(
-                        indication = null, interactionSource = remember{ MutableInteractionSource() },
-                        onClick = {onBluetoothClick()}
-                    )  // Larger icon size
+                    tint = if(isConnected.value)MaterialTheme.colorScheme.primary else Color.Gray,  // Use a contrasting color
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = {
+                                if (bluetoothPermissionState.allPermissionsGranted) {
+                                    if (!isConnected.value) {
+                                        bluetoothManager.initializeBluetooth(
+                                            bluetoothPermissionState
+                                        ) {
+                              // Update connection state in ViewModel
+                                            Log.d("Bluetooth", "Connected to device")
+                                            bluetoothViewModel.updateConnectionStatus(true)
+                                        }
+                                    } else {
+                                        bluetoothManager.disconnect()
+                                        bluetoothViewModel.updateConnectionStatus(false) // Update connection state in ViewModel
+                                        Log.d("Bluetooth", "Disconnected")
+                                    }
+                                } else {
+                                    bluetoothPermissionState.launchMultiplePermissionRequest()
+                                }
+                            }
+                        )  // Larger icon size
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             // Headlights Toggle
             HeadLight(switchState) {
                 switchState = it
+                if(bluetoothPermissionState.allPermissionsGranted){
+                    if(isConnected.value){
+                        bluetoothManager.sendData("Headlights are on")
+                    }
+                    else{
+                        Toast.makeText(context,"Not connected to any device to send data",Toast.LENGTH_SHORT).show()
+                    }
+                }
+                else{
+                    Toast.makeText(context,"Don't have permission to send data",Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
-        // modified map layout 9/16/24
+        // Placeholder for Map, replace with an actual map implementation
         Box(
             modifier = Modifier
-                .padding(horizontal = 12.dp)
                 .fillMaxWidth()
                 .height(180.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .shadow(4.dp)
                 .clickable {
                     navController.navigate(Screens.MAPSCREEN.name)
                 },
         ) {
-            if (locationPermissionState.status.isGranted)
-            {
+            if (locationPermissionState.status.isGranted) {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraPositionState,
+                    cameraPositionState,
                     onMapLoaded = {
                         Toast.makeText(context, "map loaded", Toast.LENGTH_SHORT).show()
                     }
                 )
-            }
-            else
-            {
+            } else {
                 Text(text = "Location permission required", modifier = Modifier.fillMaxSize())
 
             }
@@ -228,7 +270,6 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,o
 }
 
 @Composable
-@Preview(showBackground = true)
 private fun HeadLight(switchState: Boolean = false, onSwitchChanged: (Boolean) -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,

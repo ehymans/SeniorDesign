@@ -23,6 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.sur_tec.helmetiq.BluetoothViewModel
 import com.sur_tec.helmetiq.Contacts
 import com.sur_tec.helmetiq.Mainscreen
 import com.sur_tec.helmetiq.map.MapScreen
@@ -31,7 +32,7 @@ import com.sur_tec.helmetiq.navigation.Screens
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun HelmetIQNavigation(onBluetoothClick:()->Unit) {
+fun HelmetIQNavigation(bluetoothViewModel: BluetoothViewModel) {
     val navController = rememberNavController()
     val bottomBarState = rememberSaveable { (mutableStateOf(true)) }
 
@@ -56,7 +57,7 @@ fun HelmetIQNavigation(onBluetoothClick:()->Unit) {
     ) { padding ->
         NavHost(navController = navController, startDestination = Screens.MAINSCREEN.name) {
             composable(Screens.MAINSCREEN.name) {
-                Mainscreen(navController = navController, modifier = Modifier.padding(padding),onBluetoothClick)
+                Mainscreen(navController = navController, modifier = Modifier.padding(padding),bluetoothViewModel)
             }
             composable(Screens.CONTACTSSCREEN.name) {
                 Contacts(navController = navController, modifier = Modifier.padding(padding))

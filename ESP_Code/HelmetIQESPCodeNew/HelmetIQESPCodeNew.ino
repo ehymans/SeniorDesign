@@ -188,7 +188,7 @@ void handleHeadlightAndTailLight() {
     Serial.println("Headlight and tail light OFF");
   }
 
-  delay(900);  // Wait for 1 second before checking again
+  delay(2000);  // Wait for 2 seconds before checking again
 }
 
 // Define a minimum time to keep the brake light on (e.g., 1 second)

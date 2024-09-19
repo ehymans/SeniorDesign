@@ -212,17 +212,20 @@ void handleDeceleration() {
   if (accelDelta > decelThreshold) {  // Deceleration is detected
     if (!isDecelerating) {
       isDecelerating = true;
-      Serial.println("Deceleration detected, brake light ON");
+      Serial.println("Deceleration detected, brake light blinking ON");
     }
-    ledcWrite(tailLightPin, 250);  // Turn on brake light during deceleration
+    
+    // Blink brake light while decelerating
+    blinkBrakeLight(2);  // Blink once per iteration while decelerating
     decelEndTime = millis();  // Reset the deceleration end time
   } else {
     if (isDecelerating && millis() - decelEndTime > 500) {  // After deceleration stops
       isDecelerating = false;
       Serial.println("Deceleration stopped, extra blinks triggered");
-      blinkBrakeLight(2);  // Blink brake light twice after deceleration
+      blinkBrakeLight(6);  // Blink brake light twice after deceleration stops
     }
-    ledcWrite(tailLightPin, 0);  // Turn off brake light when not decelerating
+    
+    ledcWrite(tailLightPin, 0);  // Turn off brake light after blinking
   }
 
   // Update the previous acceleration magnitude
@@ -231,9 +234,9 @@ void handleDeceleration() {
 
 void blinkBrakeLight(int blinks) {
   for (int i = 0; i < blinks; i++) {
-    ledcWrite(tailLightPin, 250);
-    delay(200);  // Short blink duration
-    ledcWrite(tailLightPin, 50);;
-    delay(200);  // Short pause between blinks
+    ledcWrite(tailLightPin, 250);  // Full brightness
+    delay(100);  // Short blink duration
+    ledcWrite(tailLightPin, 50);  // Dim to 50% brightness during pause
+    delay(100);  // Short pause between blinks
   }
 }

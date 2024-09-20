@@ -12,8 +12,17 @@ class BluetoothViewModel: ViewModel() {
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected // Expose it as StateFlow
 
+    // StateFlow for distance (initialized to 0.0)
+    private val _distance = MutableStateFlow("0")
+    val distance: StateFlow<String> = _distance // Expose it as StateFlow
+
     // Function to update the connection status
     fun updateConnectionStatus(status: Boolean) {
         _isConnected.value = status
+    }
+
+    // Function to update the distance
+    fun updateDistance(newDistance: String) {
+        _distance.value = newDistance
     }
 }

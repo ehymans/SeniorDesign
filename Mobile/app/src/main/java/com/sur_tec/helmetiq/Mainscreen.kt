@@ -68,7 +68,7 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
 
     val context = LocalContext.current
     val isConnected = bluetoothViewModel.isConnected.collectAsState() // Observing the connection state
-
+    val distanceTravelled=bluetoothViewModel.distance.collectAsState().value
     // Initialize BluetoothManager
     val bluetoothManager = remember { BluetoothManager(context) }
 
@@ -88,6 +88,24 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
 
     var locationPermissionGranted by remember { mutableStateOf(false) }
+
+
+    //UPDATE DISTANCE TRAVELLED
+    LaunchedEffect (distanceTravelled){
+        if(bluetoothPermissionState.allPermissionsGranted){
+            if(isConnected.value){
+                bluetoothManager.listenForData { data->
+                    bluetoothViewModel.updateDistance(data)
+                }
+            }
+//            else{
+//                Toast.makeText(context,"Not connected to any device to receive data",Toast.LENGTH_SHORT).show()
+//            }
+        }
+        else{
+            Toast.makeText(context,"Don't have permission to receive data",Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LaunchedEffect(key1 = locationPermissionState.status.isGranted) {
         if (!locationPermissionGranted) {
@@ -166,14 +184,20 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
                                         bluetoothManager.initializeBluetooth(
                                             bluetoothPermissionState
                                         ) {
-                              // Update connection state in ViewModel
+                                            // Update connection state in ViewModel
                                             Log.d("Bluetooth", "Connected to device")
                                             bluetoothViewModel.updateConnectionStatus(true)
+                                            bluetoothManager.listenForData { data ->
+                                                bluetoothViewModel.updateDistance(data)
+                                            }
                                         }
                                     } else {
                                         bluetoothManager.disconnect()
                                         bluetoothViewModel.updateConnectionStatus(false) // Update connection state in ViewModel
                                         Log.d("Bluetooth", "Disconnected")
+                                        bluetoothManager.listenForData { data ->
+                                            bluetoothViewModel.updateDistance(data)
+                                        }
                                     }
                                 } else {
                                     bluetoothPermissionState.launchMultiplePermissionRequest()
@@ -237,7 +261,7 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
                     )
             ) {
                 Text(
-                    text = "Total Distance Traveled: 10 Miles",
+                    text = "Total Distance Traveled: $distanceTravelled Miles",
                     color =  MaterialTheme.colorScheme.onPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium,

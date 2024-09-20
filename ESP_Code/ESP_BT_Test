@@ -1,0 +1,62 @@
+include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+int counter = 0;
+unsigned long lastSendTime = 0;
+
+void setup() {
+// Start serial monitor
+Serial.begin(115200);
+
+// Start Bluetooth serial communication with a name
+SerialBT.begin("ESP32_BT");
+Serial.println("Bluetooth Started! Waiting for connection...");
+}
+
+void loop() {
+// Check if data is available from the Android device
+if (SerialBT.available()) {
+String incomingData = "";
+
+// Read incoming characters until a newline or return character is detected
+while (SerialBT.available()) {
+char c = SerialBT.read();
+if (c == '\n' || c == '\r') break; // Terminate on newline or carriage return
+incomingData += c;
+}
+
+if (incomingData.length() > 0) {
+// Print the received data
+Serial.print("Received Data: ");
+Serial.println(incomingData);
+
+// Try to convert the incoming string to an integer
+int receivedInteger = incomingData.toInt();
+
+if (receivedInteger != 0 || incomingData == "0") { // Ensure valid conversion
+Serial.print("Received Integer: ");
+Serial.println(receivedInteger);
+} else {
+Serial.println("Invalid integer received.");
+}
+}
+}
+
+// Send data every 1 second
+unsigned long currentMillis = millis();
+if (currentMillis - lastSendTime >= 1000) {
+lastSendTime = currentMillis;
+
+// Send counter value via Bluetooth
+SerialBT.print("Updating Distance... ");
+SerialBT.println(counter);
+
+// Print to serial monitor
+Serial.println(counter);
+
+// Increment counter
+counter++;
+}
+
+delay(20); // Small delay to avoid overloading the loop
+}

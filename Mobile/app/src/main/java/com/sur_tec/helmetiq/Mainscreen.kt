@@ -61,6 +61,10 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.sur_tec.helmetiq.navigation.Screens
 import com.sur_tec.helmetiq.ui.theme.customColors
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextAlign
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -224,11 +228,14 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
             }
         }
 
-        // Placeholder for Map, replace with an actual map implementation
+        // Map layout updated 9/22/24
         Box(
             modifier = Modifier
+                .padding(horizontal = 12.dp)
                 .fillMaxWidth()
                 .height(180.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .shadow(4.dp, RoundedCornerShape(8.dp))
                 .clickable {
                     navController.navigate(Screens.MAPSCREEN.name)
                 },
@@ -236,14 +243,18 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
             if (locationPermissionState.status.isGranted) {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
-                    cameraPositionState,
+                    cameraPositionState = cameraPositionState,
                     onMapLoaded = {
                         Toast.makeText(context, "map loaded", Toast.LENGTH_SHORT).show()
                     }
                 )
             } else {
-                Text(text = "Location permission required", modifier = Modifier.fillMaxSize())
-
+                Text(
+                    text = "Location permission required",
+                    modifier = Modifier.fillMaxSize(),
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
 

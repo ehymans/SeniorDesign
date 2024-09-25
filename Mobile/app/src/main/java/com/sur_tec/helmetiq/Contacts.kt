@@ -1,8 +1,20 @@
 package com.sur_tec.helmetiq
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.CornerSize
@@ -12,12 +24,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,6 +52,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavHostController
 import com.sur_tec.helmetiq.ui.theme.Monnestraut
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.Credentials
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.IOException
 
 data class Contact(val name: String, val phoneNumber: String)
 
@@ -98,6 +133,9 @@ fun ContactDialog(
 
 @Composable
 fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
+    val context = LocalContext.current // Get the current context
+    val coroutineScope = rememberCoroutineScope() // Remember the coroutine scope
+
     var switchState by remember { mutableStateOf(false) }
     var showNewContactDialog by remember { mutableStateOf(false) }
     var showEditContactDialog by remember { mutableStateOf(false) }
@@ -128,6 +166,14 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
                 showEditContactDialog = true
             }
         )
+        // Add the "Test Emergency SMS" button
+        Button(onClick = {
+            coroutineScope.launch {
+                sendEmergencySms(context, contacts)
+            }
+        }) {
+            Text("Test Emergency SMS")
+        }
     }
 
     if (showNewContactDialog) {
@@ -157,6 +203,8 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
         )
     }
 }
+
+
 
 @Composable
 fun NewContactAndSmsToggle(
@@ -329,37 +377,65 @@ fun Header() {
     }
 }
 
-/*
-@Composable
-fun BottomNavigation(navController: @Composable NavHostController) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Button(
-            onClick = { navController.navigate(Screens.MAINSCREEN.name) },
-            modifier = Modifier.padding(0.dp, 6.dp)
-        ) {
-            Text("Home")
+// Function to send emergency SMS using Twilio API
+suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
+    if (contacts.isEmpty()) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "No contacts to send SMS to.", Toast.LENGTH_SHORT).show()
         }
-        Button(
-            onClick = { navController.navigate(Screens.CONTACTSSCREEN.name) },
-            modifier = Modifier.padding(0.dp, 6.dp)
+        return
+    }
 
-        ) {
-            Text("SOS Contacts")
+    val accountSid = "XXXXXX"
+    val authToken = "XXXXXX"
+    val fromNumber = "+XXXXXXXXXXXX"
+
+    val client = OkHttpClient()
+
+    contacts.forEach { contact ->
+        val toNumber = contact.phoneNumber
+        val messageBody = "HelmetIQ Twilio API Test 9/25/24"
+
+        val url = "https://api.twilio.com/2010-04-01/Accounts/$accountSid/Messages.json"
+
+        val formBody = FormBody.Builder()
+            .add("To", toNumber)
+            .add("From", fromNumber)
+            .add("Body", messageBody)
+            .build()
+
+        val credential = Credentials.basic(accountSid, authToken)
+
+        val request = Request.Builder()
+            .url(url)
+            .post(formBody)
+            .header("Authorization", credential)
+            .build()
+
+        try {
+            val response = withContext(Dispatchers.IO) {
+                client.newCall(request).execute()
+            }
+            val responseBody = response.body?.string()
+            if (!response.isSuccessful) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Failed to send message to ${contact.name}: ${response.code} - $responseBody", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Message sent to ${contact.name}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                val errorMessage = when (e) {
+                    is IOException -> "Network error: ${e.message}"
+                    is IllegalArgumentException -> "Invalid argument: ${e.message}"
+                    else -> "Unexpected error: ${e.javaClass.simpleName} - ${e.message}"
+                }
+                Toast.makeText(context, "Error sending message to ${contact.name}: $errorMessage", Toast.LENGTH_LONG).show()
+                e.printStackTrace() // This will print the full stack trace to logcat
+            }
         }
     }
-}*/
-
-
-/*
-@Composable
-@Preview(showBackground = true)
-fun PreviewfunNewContactAndSmsToggle() {
-    NewContactAndSmsToggle(false) {
-
-    }
-}*/
+}

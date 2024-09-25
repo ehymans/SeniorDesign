@@ -9,8 +9,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.core.app.ActivityCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.MultiplePermissionsState
@@ -78,7 +76,9 @@ class BluetoothManager(private val context: Context) {
                     Toast.makeText(context,"Connected to ${device.name}",Toast.LENGTH_SHORT).show()
                     onConnected()
                 }
-            } catch (e: Exception) {
+            }
+            catch (e: Exception)
+            {
                 withContext(Dispatchers.Main){
                     Toast.makeText(context,"Connected failed: ${e.message}",Toast.LENGTH_SHORT).show()
                     Log.e("Bluetooth", "Connection failed", e)

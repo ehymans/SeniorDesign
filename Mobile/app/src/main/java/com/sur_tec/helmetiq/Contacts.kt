@@ -1,3 +1,4 @@
+// File: Contacts.kt
 package com.sur_tec.helmetiq
 
 import android.content.Context
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -35,6 +37,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,8 +48,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -71,7 +77,16 @@ fun ContactDialog(
     onDelete: () -> Unit
 ) {
     var name by remember { mutableStateOf(contact?.name ?: "") }
-    var phoneNumber by remember { mutableStateOf(contact?.phoneNumber ?: "") }
+    var phoneDigits by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = if (contact == null) "" else contact.phoneNumber.filter { it.isDigit() }.takeLast(10),
+                selection = TextRange(
+                    if (contact == null) 0 else contact.phoneNumber.filter { it.isDigit() }.takeLast(10).length
+                )
+            )
+        )
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -96,9 +111,19 @@ fun ContactDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = phoneNumber,
-                    onValueChange = { phoneNumber = it },
+                    value = phoneDigits,
+                    onValueChange = { newInput ->
+                        // Filter out non-digit characters and limit to 10 digits
+                        val filteredText = newInput.text.filter { it.isDigit() }.take(10)
+                        // Update the phoneDigits state with the new filtered text and set cursor to the end
+                        phoneDigits = TextFieldValue(
+                            text = filteredText,
+                            selection = TextRange(filteredText.length)
+                        )
+                    },
                     label = { Text("Phone Number") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    visualTransformation = PhoneNumberVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -121,7 +146,11 @@ fun ContactDialog(
                             Text("Cancel")
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { onSave(name, phoneNumber) }) {
+                        Button(onClick = {
+                            val digits = phoneDigits.text
+                            val formattedNumber = "+1$digits"
+                            onSave(name, formattedNumber)
+                        }) {
                             Text("Save")
                         }
                     }
@@ -130,17 +159,21 @@ fun ContactDialog(
         }
     }
 }
-
 @Composable
 fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
-    val context = LocalContext.current // Get the current context
-    val coroutineScope = rememberCoroutineScope() // Remember the coroutine scope
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     var switchState by remember { mutableStateOf(false) }
     var showNewContactDialog by remember { mutableStateOf(false) }
     var showEditContactDialog by remember { mutableStateOf(false) }
     var contacts by remember { mutableStateOf(listOf<Contact>()) }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
+
+    // Load contacts from SharedPreferences when composable is first launched
+    LaunchedEffect(Unit) {
+        contacts = PrefsHelper.loadContacts(context)
+    }
 
     Column(
         modifier = modifier
@@ -181,8 +214,11 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
             contact = null,
             onDismiss = { showNewContactDialog = false },
             onSave = { name, phoneNumber ->
-                contacts = contacts + Contact(name, phoneNumber)
+                val newContact = Contact(name, phoneNumber)
+                contacts = contacts + newContact
+                PrefsHelper.saveContacts(context, contacts)
                 showNewContactDialog = false
+                Toast.makeText(context, "Contact added", Toast.LENGTH_SHORT).show()
             },
             onDelete = { } // Not used for new contacts
         )
@@ -193,18 +229,22 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
             contact = selectedContact,
             onDismiss = { showEditContactDialog = false },
             onSave = { name, phoneNumber ->
-                contacts = contacts.map { if (it == selectedContact) Contact(name, phoneNumber) else it }
+                contacts = contacts.map {
+                    if (it == selectedContact) Contact(name, phoneNumber) else it
+                }
+                PrefsHelper.saveContacts(context, contacts)
                 showEditContactDialog = false
+                Toast.makeText(context, "Contact updated", Toast.LENGTH_SHORT).show()
             },
             onDelete = {
                 contacts = contacts.filter { it != selectedContact }
+                PrefsHelper.saveContacts(context, contacts)
                 showEditContactDialog = false
+                Toast.makeText(context, "Contact deleted", Toast.LENGTH_SHORT).show()
             }
         )
     }
 }
-
-
 
 @Composable
 fun NewContactAndSmsToggle(
@@ -288,8 +328,17 @@ fun NewContactAndSmsToggle(
 @Composable
 fun ContactList(contacts: List<Contact>, onContactClick: (Contact) -> Unit) {
     Column {
-        contacts.forEach { contact ->
-            ContactItem(contact, onContactClick)
+        if (contacts.isEmpty()) {
+            Text(
+                text = "No Emergency Contacts Added.",
+                fontSize = 16.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(16.dp)
+            )
+        } else {
+            contacts.forEach { contact ->
+                ContactItem(contact, onContactClick)
+            }
         }
     }
 }
@@ -335,7 +384,7 @@ fun ContactItem(contact: Contact, onClick: (Contact) -> Unit) {
         )
     }
 }
-// SAVE THIS FUNCTION!
+
 @Composable
 fun CustomFloatingActionButton(
     onClick: () -> Unit,
@@ -344,7 +393,8 @@ fun CustomFloatingActionButton(
     icon: @Composable () -> Unit,
     shape: CornerBasedShape = MaterialTheme.shapes.small
 ) {
-    Box(contentAlignment = Alignment.Center,
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
             .padding(end = 12.dp)
             .size(48.dp)
@@ -352,18 +402,17 @@ fun CustomFloatingActionButton(
             .background(backgroundColor)
             .clickable {
                 onClick()
-            }) {
+            }
+    ) {
         icon()
     }
 }
 
-// SAVE THIS FUNCTION!
 @Composable
 fun Header() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-
     ) {
         Text(
             text = "Emergency Contacts",
@@ -419,7 +468,11 @@ suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
             val responseBody = response.body?.string()
             if (!response.isSuccessful) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Failed to send message to ${contact.name}: ${response.code} - $responseBody", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        context,
+                        "Failed to send message to ${contact.name}: ${response.code} - $responseBody",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             } else {
                 withContext(Dispatchers.Main) {
@@ -433,7 +486,11 @@ suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
                     is IllegalArgumentException -> "Invalid argument: ${e.message}"
                     else -> "Unexpected error: ${e.javaClass.simpleName} - ${e.message}"
                 }
-                Toast.makeText(context, "Error sending message to ${contact.name}: $errorMessage", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    "Error sending message to ${contact.name}: $errorMessage",
+                    Toast.LENGTH_LONG
+                ).show()
                 e.printStackTrace() // This will print the full stack trace to logcat
             }
         }

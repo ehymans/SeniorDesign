@@ -199,7 +199,10 @@ void delayWithSensorCheck(int delayTime) {
 
 
 // Threshold for collision detection (adjust as needed)
-const float collisionThreshold = 20.0; // Example value
+const float collisionThreshold = 12.0; // Adjust thresholds in all directions
+//const float collisionThresholdY = 12.0; // Adjust thresholds in all directions
+//const float collisionThresholdZ = 12.0; // Adjust thresholds in all directions
+const float immobileThreshold = 8.0; //modify with testing
 
 // Task for collision detection
 void handleCollisionDetection(void *param) {
@@ -234,28 +237,39 @@ void handleCollisionDetection(void *param) {
     if (deltaX > collisionThreshold || deltaY > collisionThreshold || deltaZ > collisionThreshold) {
       Serial.println("Collision detected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
       inCollision = true;
-      
+      if(inCollision){
       // Blink all lights in hazard mode for collision indication
       digitalWrite(leftLedPin, HIGH);
       digitalWrite(rightLedPin, HIGH);
       digitalWrite(headlightPin, HIGH);
       ledcWrite(tailLightPin, 255); // Full brightness for tail light
-      vTaskDelay(200 / portTICK_PERIOD_MS);
+      vTaskDelay(300 / portTICK_PERIOD_MS);
       digitalWrite(leftLedPin, LOW);
       digitalWrite(rightLedPin, LOW);
       digitalWrite(headlightPin, LOW);
       ledcWrite(tailLightPin, 0);
-      vTaskDelay(200 / portTICK_PERIOD_MS);
+      vTaskDelay(300 / portTICK_PERIOD_MS);
       digitalWrite(leftLedPin, HIGH);
       digitalWrite(rightLedPin, HIGH);
       digitalWrite(headlightPin, HIGH);
       ledcWrite(tailLightPin, 255); // Full brightness for tail light
-      vTaskDelay(200 / portTICK_PERIOD_MS);
+      vTaskDelay(300 / portTICK_PERIOD_MS);
       digitalWrite(leftLedPin, LOW);
       digitalWrite(rightLedPin, LOW);
       digitalWrite(headlightPin, LOW);
       ledcWrite(tailLightPin, 0);
-      vTaskDelay(200 / portTICK_PERIOD_MS);
+      vTaskDelay(300 / portTICK_PERIOD_MS);
+      digitalWrite(leftLedPin, HIGH);
+      digitalWrite(rightLedPin, HIGH);
+      digitalWrite(headlightPin, HIGH);
+      ledcWrite(tailLightPin, 255); // Full brightness for tail light
+      vTaskDelay(300 / portTICK_PERIOD_MS);
+      digitalWrite(leftLedPin, LOW);
+      digitalWrite(rightLedPin, LOW);
+      digitalWrite(headlightPin, LOW);
+      ledcWrite(tailLightPin, 0);
+      vTaskDelay(300 / portTICK_PERIOD_MS);
+      }  
     } else {
       inCollision = false;
     }

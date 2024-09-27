@@ -33,6 +33,8 @@ const unsigned long debounceDelay = 600;  // 300ms debounce delay
 bool inCollision = false;
 unsigned long collisionBlinkEndTime = 0;
 
+bool deccel = false;
+
 // Initialize VEML7700 object for the light sensor
 Adafruit_VEML7700 veml = Adafruit_VEML7700();
 
@@ -51,13 +53,13 @@ void handleHeadlightAndTailLight(void *param);
 void IRAM_ATTR leftTouchISR();
 void IRAM_ATTR rightTouchISR();
 void blinkBrakeLight(int blinks);
-void handleDeceleration(void *param);
+//void handleDeceleration(void *param);
 void handleCollisionDetection(void *param);
 
 // FreeRTOS Task Handles
 TaskHandle_t blinkerTaskHandle;
 TaskHandle_t headlightTaskHandle;
-TaskHandle_t decelerationTaskHandle;
+//TaskHandle_t decelerationTaskHandle;
 TaskHandle_t collisionTaskHandle;
 
 // Setup function
@@ -102,7 +104,7 @@ void setup() {
   // Create FreeRTOS tasks
   xTaskCreatePinnedToCore(handleBlinkers, "BlinkerTask", 2048, NULL, 1, &blinkerTaskHandle, 0);
   xTaskCreatePinnedToCore(handleHeadlightAndTailLight, "HeadlightTask", 2048, NULL, 1, &headlightTaskHandle, 0);
- // xTaskCreatePinnedToCore(handleDeceleration, "DecelerationTask", 2048, NULL, 1, &decelerationTaskHandle, 0);
+  //xTaskCreatePinnedToCore(handleDeceleration, "DecelerationTask", 2048, NULL, 1, &decelerationTaskHandle, 0);
   xTaskCreatePinnedToCore(handleCollisionDetection, "CollisionTask", 2048, NULL, 1, &collisionTaskHandle, 0);
 
 
@@ -174,7 +176,7 @@ void handleHeadlightAndTailLight(void *param) {
     Serial.println(lux);
 
     // Set a threshold for low light to turn on the headlight and tail light
-    if (lux < 130.0) {  // Adjust threshold as needed
+    if (lux < 90.0) {  // Adjust threshold as needed
       digitalWrite(headlightPin, HIGH);  // Turn on headlight
       ledcWrite(tailLightPin, 50);  // 50% brightness for tail light
       Serial.println("Headlight ON and tail light at 50% brightness");
@@ -204,6 +206,8 @@ const float collisionThreshold = 12.0; // Adjust thresholds in all directions
 //const float collisionThresholdZ = 12.0; // Adjust thresholds in all directions
 const float immobileThreshold = 8.0; //modify with testing
 
+const float decelThreshold = 4.0; //Adjust when testing
+
 // Task for collision detection
 void handleCollisionDetection(void *param) {
   sensors_event_t a, g, temp;  // Accelerometer, Gyroscope, and Temperature data
@@ -213,8 +217,8 @@ void handleCollisionDetection(void *param) {
     mpu.getEvent(&a, &g, &temp);
 
     // Calculate the delta for each axis
-    float deltaX = abs(a.acceleration.x - accelX);
-    float deltaY = abs(a.acceleration.y - accelY);
+    float deltaX = (a.acceleration.x - accelX);
+    float deltaY = (a.acceleration.y - accelY);
     float deltaZ = abs(a.acceleration.z - accelZ);
 
     // Update previous acceleration values
@@ -270,10 +274,36 @@ void handleCollisionDetection(void *param) {
       ledcWrite(tailLightPin, 0);
       vTaskDelay(300 / portTICK_PERIOD_MS);
       }  
-    } else {
+    } 
+    else if (deltaX > decelThreshold || deltaY > decelThreshold){
+      Serial.println("Slow down detected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      
+      // Blink brake light
+      ledcWrite(tailLightPin, 255); // Full brightness for tail light
+      vTaskDelay(300 / portTICK_PERIOD_MS);
+   
+      ledcWrite(tailLightPin, 0);
+      vTaskDelay(300 / portTICK_PERIOD_MS);
+
+      ledcWrite(tailLightPin, 255); // Full brightness for tail light
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+
+      ledcWrite(tailLightPin, 0);
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+  
+      ledcWrite(tailLightPin, 255); // Full brightness for tail light
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+ 
+      ledcWrite(tailLightPin, 0);
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+    }
+
+    else {
       inCollision = false;
     }
 
     vTaskDelay(100 / portTICK_PERIOD_MS);  // Adjust delay as needed
   }
 }
+
+

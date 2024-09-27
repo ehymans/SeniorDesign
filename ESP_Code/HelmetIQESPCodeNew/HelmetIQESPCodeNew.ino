@@ -102,8 +102,9 @@ void setup() {
   // Create FreeRTOS tasks
   xTaskCreatePinnedToCore(handleBlinkers, "BlinkerTask", 2048, NULL, 1, &blinkerTaskHandle, 0);
   xTaskCreatePinnedToCore(handleHeadlightAndTailLight, "HeadlightTask", 2048, NULL, 1, &headlightTaskHandle, 0);
-  xTaskCreatePinnedToCore(handleDeceleration, "DecelerationTask", 2048, NULL, 1, &decelerationTaskHandle, 0);
+ // xTaskCreatePinnedToCore(handleDeceleration, "DecelerationTask", 2048, NULL, 1, &decelerationTaskHandle, 0);
   xTaskCreatePinnedToCore(handleCollisionDetection, "CollisionTask", 2048, NULL, 1, &collisionTaskHandle, 0);
+
 
   Serial.println("System initialized.");
 }
@@ -173,7 +174,7 @@ void handleHeadlightAndTailLight(void *param) {
     Serial.println(lux);
 
     // Set a threshold for low light to turn on the headlight and tail light
-    if (lux < 170.0) {  // Adjust threshold as needed
+    if (lux < 130.0) {  // Adjust threshold as needed
       digitalWrite(headlightPin, HIGH);  // Turn on headlight
       ledcWrite(tailLightPin, 50);  // 50% brightness for tail light
       Serial.println("Headlight ON and tail light at 50% brightness");
@@ -187,125 +188,78 @@ void handleHeadlightAndTailLight(void *param) {
   }
 }
 
-// Thresholds for detecting deceleration
-const float decelThreshold = 1.25;  // Adjust this based on testing
-bool isDecelerating = false;
-unsigned long decelEndTime = 0;
-// FreeRTOS task for handling deceleration and brake light control
-void handleDeceleration(void *param) {
-  while (true) {
-    // Read acceleration data from MPU6050
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
-
-    // Get acceleration values on X, Y, Z axes
-    accelX = a.acceleration.x;
-    accelY = a.acceleration.y;
-    accelZ = a.acceleration.z;
-
-    // Calculate the magnitude of the acceleration vector
-    float accelMagnitude = sqrt(accelX * accelX + accelY * accelY);
-    // Smooth out the acceleration using exponential smoothing (optional)
-  const float alpha = 0.1;  // Smoothing factor (between 0 and 1)
-  float smoothedAccelMagnitude = (alpha * accelMagnitude) + ((1 - alpha) * prevAccelMagnitude);
-
-    // Calculate the change in acceleration (delta) to detect deceleration
-    float accelDelta = prevAccelMagnitude - smoothedAccelMagnitude;
-    prevAccelMagnitude = accelMagnitude;
-    Serial.println("Accel reading: ");
-    Serial.println(smoothedAccelMagnitude);
-    Serial.println("Accel Delta: ");
-    Serial.println(accelDelta);
-
-    // Detect deceleration
-    if (accelDelta > decelThreshold) {
-      if (!isDecelerating) {
-        isDecelerating = true;
-        Serial.println("Deceleration detected, brake light blinking ON");
-        blinkBrakeLight(10);  // Blink brake light
-      }
-      decelEndTime = millis();  // Reset deceleration end time
-    } else if (isDecelerating && millis() - decelEndTime > 200) {
-      isDecelerating = false;
-      Serial.println("Deceleration stopped, extra blinks triggered");
-      blinkBrakeLight(6);  // Extra blinks after deceleration
-    }
-
-    prevAccelMagnitude = accelMagnitude;
-
-    vTaskDelay(200 / portTICK_PERIOD_MS);  // Task delay
-  }
-}
-
-
-// Threshold for collision detection
-const float collisionThreshold = 12;  // Adjust this based on testing for collision
-const float resumeMotionThreshold = 12;  // Threshold to exit hazard mode (when movement resumes)
-// FreeRTOS task for handling collision detection
-// FreeRTOS task for handling collision detection
-void handleCollisionDetection(void *param) {
-  while (true) {
-    // Read accelerometer and gyroscope data from MPU6050
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
-
-    // Get acceleration and gyroscope values
-    float accelMagnitude = sqrt(a.acceleration.x * a.acceleration.x + a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z);
-    float gyroMagnitude = sqrt(g.gyro.x * g.gyro.x + g.gyro.y * g.gyro.y + g.gyro.z * g.gyro.z);
-
-    // Detect collision and hazard lights
-    if (accelMagnitude > collisionThreshold || gyroMagnitude > 5) {
-      if (!inCollision) {
-        inCollision = true;
-        Serial.println("Collision detected, hazard lights ON");
-      }
-      blinkHazardLights(3);
-      collisionBlinkEndTime = millis();
-    } else if (inCollision && accelMagnitude > resumeMotionThreshold && millis() - collisionBlinkEndTime > 500) {
-      inCollision = false;
-      Serial.println("Motion resumed after collision, hazard lights OFF");
-    }
-
-    vTaskDelay(200 / portTICK_PERIOD_MS);  // Task delay
-  }
-}
-
-// Other existing functions (e.g., blinkBrakeLight, blinkHazardLights) remain unchanged
-// Function to blink the brake light
-void blinkBrakeLight(int blinks) {
-  for (int i = 0; i < blinks; i++) {
-    ledcWrite(tailLightPin, 250);  // Full brightness
-    vTaskDelay(100 / portTICK_PERIOD_MS);  // Short blink duration
-    ledcWrite(tailLightPin, 50);  // Dim to 50% brightness during pause
-    vTaskDelay(100 / portTICK_PERIOD_MS);  // Short pause between blinks
-    ledcWrite(tailLightPin, 250);  // Full brightness
-  }
-}
-
-// Function to blink all lights as hazard lights
-void blinkHazardLights(int blinks) {
-  for (int i = 0; i < blinks; i++) {
-    // Turn on all lights (headlight, tail light, both blinkers)
-    ledcWrite(tailLightPin, 250);  // Full brightness for tail light and brake light
-    digitalWrite(headlightPin, HIGH);
-    digitalWrite(leftLedPin, HIGH);
-    digitalWrite(rightLedPin, HIGH);
-    vTaskDelay(600 / portTICK_PERIOD_MS);  // Hazard blink duration
-
-    // Turn off all lights
-    ledcWrite(tailLightPin, 0);  // Turn off tail light
-    digitalWrite(headlightPin, LOW);
-    digitalWrite(leftLedPin, LOW);
-    digitalWrite(rightLedPin, LOW);
-    vTaskDelay(600 / portTICK_PERIOD_MS);  // Hazard blink off duration
-  }
-}
-
 void delayWithSensorCheck(int delayTime) {
   unsigned long startTime = millis();
   while (millis() - startTime < delayTime) {
     // Let the system remain responsive and check for sensor states
     // Insert code here if needed to handle other tasks
     vTaskDelay(1 / portTICK_PERIOD_MS);  // Let other tasks run during the delay
+  }
+}
+
+
+// Threshold for collision detection (adjust as needed)
+const float collisionThreshold = 20.0; // Example value
+
+// Task for collision detection
+void handleCollisionDetection(void *param) {
+  sensors_event_t a, g, temp;  // Accelerometer, Gyroscope, and Temperature data
+
+  while (true) {
+    // Get the accelerometer and gyroscope readings
+    mpu.getEvent(&a, &g, &temp);
+
+    // Calculate the delta for each axis
+    float deltaX = abs(a.acceleration.x - accelX);
+    float deltaY = abs(a.acceleration.y - accelY);
+    float deltaZ = abs(a.acceleration.z - accelZ);
+
+    // Update previous acceleration values
+    accelX = a.acceleration.x;
+    accelY = a.acceleration.y;
+    accelZ = a.acceleration.z;
+
+  // Print the current acceleration values and the deltas
+    Serial.print("Accel X: "); Serial.print(a.acceleration.x); 
+    Serial.print(", Delta X: "); Serial.println(deltaX);
+
+    Serial.print("Accel Y: "); Serial.print(a.acceleration.y); 
+    Serial.print(", Delta Y: "); Serial.println(deltaY);
+
+    Serial.print("Accel Z: "); Serial.print(a.acceleration.z); 
+    Serial.print(", Delta Z: "); Serial.println(deltaZ);
+
+    
+    // Check if any delta exceeds the collision threshold
+    if (deltaX > collisionThreshold || deltaY > collisionThreshold || deltaZ > collisionThreshold) {
+      Serial.println("Collision detected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      inCollision = true;
+      
+      // Blink all lights in hazard mode for collision indication
+      digitalWrite(leftLedPin, HIGH);
+      digitalWrite(rightLedPin, HIGH);
+      digitalWrite(headlightPin, HIGH);
+      ledcWrite(tailLightPin, 255); // Full brightness for tail light
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+      digitalWrite(leftLedPin, LOW);
+      digitalWrite(rightLedPin, LOW);
+      digitalWrite(headlightPin, LOW);
+      ledcWrite(tailLightPin, 0);
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+      digitalWrite(leftLedPin, HIGH);
+      digitalWrite(rightLedPin, HIGH);
+      digitalWrite(headlightPin, HIGH);
+      ledcWrite(tailLightPin, 255); // Full brightness for tail light
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+      digitalWrite(leftLedPin, LOW);
+      digitalWrite(rightLedPin, LOW);
+      digitalWrite(headlightPin, LOW);
+      ledcWrite(tailLightPin, 0);
+      vTaskDelay(200 / portTICK_PERIOD_MS);
+    } else {
+      inCollision = false;
+    }
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);  // Adjust delay as needed
   }
 }

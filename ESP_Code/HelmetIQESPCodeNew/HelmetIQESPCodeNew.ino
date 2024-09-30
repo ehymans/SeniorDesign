@@ -4,6 +4,10 @@
 #include <Adafruit_Sensor.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+bool isHeadlightOn = false; // Track the headlight status
 
 // Define pins for touch sensors and LEDs (blinkers)
 const int leftTouchPin = 2;   // Left touch sensor
@@ -97,6 +101,9 @@ void setup() {
   // Set accelerometer range
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
 
+  SerialBT.begin("ESP32_BT"); // Name for the Bluetooth device
+  Serial.println("Bluetooth Started! Waiting for connection...");
+
   // Attach hardware interrupts for touch sensors
   attachInterrupt(digitalPinToInterrupt(leftTouchPin), leftTouchISR, CHANGE);  // Trigger on any change
   attachInterrupt(digitalPinToInterrupt(rightTouchPin), rightTouchISR, CHANGE);  // Trigger on any change
@@ -106,7 +113,7 @@ void setup() {
   xTaskCreatePinnedToCore(handleHeadlightAndTailLight, "HeadlightTask", 2048, NULL, 1, &headlightTaskHandle, 0);
   //xTaskCreatePinnedToCore(handleDeceleration, "DecelerationTask", 2048, NULL, 1, &decelerationTaskHandle, 0);
   xTaskCreatePinnedToCore(handleCollisionDetection, "CollisionTask", 2048, NULL, 1, &collisionTaskHandle, 0);
-
+  xTaskCreatePinnedToCore(handleBluetooth, "BluetoothTask", 2048, NULL, 1, NULL, 0);
 
   Serial.println("System initialized.");
 }
@@ -176,7 +183,7 @@ void handleHeadlightAndTailLight(void *param) {
     Serial.println(lux);
 
     // Set a threshold for low light to turn on the headlight and tail light
-    if (lux < 90.0) {  // Adjust threshold as needed
+    if (lux < 90.0 || isHeadlightOn) {  // Adjust threshold as needed and check Bluetooth override
       digitalWrite(headlightPin, HIGH);  // Turn on headlight
       ledcWrite(tailLightPin, 50);  // 50% brightness for tail light
       Serial.println("Headlight ON and tail light at 50% brightness");
@@ -189,6 +196,7 @@ void handleHeadlightAndTailLight(void *param) {
     vTaskDelay(2000 / portTICK_PERIOD_MS);  // Check every 2 seconds
   }
 }
+
 
 void delayWithSensorCheck(int delayTime) {
   unsigned long startTime = millis();
@@ -306,4 +314,38 @@ void handleCollisionDetection(void *param) {
   }
 }
 
+void handleBluetooth(void *param) {
+  while (true) {
+    // Check if data is available from the Android device
+    if (SerialBT.available()) {
+      String incomingData = "";
+      
+      // Read incoming characters until a newline or return character is detected
+      while (SerialBT.available()) {
+        char c = SerialBT.read();
+        if (c == '\n' || c == '\r') break; // Terminate on newline or carriage return
+        incomingData += c;
+      }
 
+      // Process the received data
+      if (incomingData.length() > 0) {
+        Serial.print("Received Data: ");
+        Serial.println(incomingData);
+
+        // Toggle the headlight based on the received message
+        if (incomingData.equalsIgnoreCase("ON")) {
+          isHeadlightOn = true;
+          Serial.println("Headlight turned ON");
+        } else if (incomingData.equalsIgnoreCase("OFF")) {
+          isHeadlightOn = false;
+          Serial.println("Headlight turned OFF");
+        } else {
+          Serial.println("Unrecognized command.");
+        }
+      }
+    }
+
+    // Delay to prevent overwhelming the Bluetooth communication
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}

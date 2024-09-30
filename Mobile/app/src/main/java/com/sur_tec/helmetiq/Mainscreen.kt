@@ -66,13 +66,78 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextAlign
 
+@Composable
+fun HeadLight(switchState: Boolean = false, onSwitchChanged: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(12.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "Headlights",
+            fontSize = 18.sp,
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontWeight = FontWeight.Medium
+        )
+        Switch(
+            checked = switchState,
+            onCheckedChange = onSwitchChanged,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.Cyan, // Thumb color when switch is ON
+                uncheckedThumbColor = Color.Gray, // Thumb color when switch is OFF
+                checkedTrackColor = Color.DarkGray, // Track color when switch is ON
+                uncheckedTrackColor = Color.LightGray, // Track color when switch is OFF
+            )
+        )
+    }
+}
+
+@Composable
+@Preview
+private fun HelmetImage() {
+    Image(
+        painter = painterResource(id = R.drawable.helmet_man_removebg), // Replace with your image resource
+        contentDescription = "Helmet",
+        modifier = Modifier.size(200.dp),
+        contentScale = ContentScale.Crop
+    )
+}
+
+@Composable
+@Preview(showBackground = true)
+private fun HeaderTitle() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Text(
+            text = "HelmetIQ",
+            fontSize = 30.sp,
+            fontStyle = FontStyle.Italic,
+            fontWeight = FontWeight.Black, // Use heavy, bold font for modern design
+            fontFamily = FontFamily.SansSerif, // Switch to modern sans-serif fonts
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 16.dp, start = 12.dp)
+
+        )
+    }
+}
+
+
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,bluetoothViewModel: BluetoothViewModel) {
 
     val context = LocalContext.current
-    val isConnected = bluetoothViewModel.isConnected.collectAsState() // Observing the connection state
-    val distanceTravelled=bluetoothViewModel.distance.collectAsState().value
+    val isConnected =
+        bluetoothViewModel.isConnected.collectAsState() // Observing the connection state
+    val distanceTravelled = bluetoothViewModel.distance.collectAsState().value
     // Initialize BluetoothManager
     val bluetoothManager = remember { BluetoothManager(context) }
 
@@ -95,19 +160,19 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
 
 
     //UPDATE DISTANCE TRAVELLED
-    LaunchedEffect (distanceTravelled){
-        if(bluetoothPermissionState.allPermissionsGranted){
-            if(isConnected.value){
-                bluetoothManager.listenForData { data->
+    LaunchedEffect(distanceTravelled) {
+        if (bluetoothPermissionState.allPermissionsGranted) {
+            if (isConnected.value) {
+                bluetoothManager.listenForData { data ->
                     bluetoothViewModel.updateDistance(data)
                 }
             }
 //            else{
 //                Toast.makeText(context,"Not connected to any device to receive data",Toast.LENGTH_SHORT).show()
 //            }
-        }
-        else{
-            Toast.makeText(context,"Don't have permission to receive data",Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Don't have permission to receive data", Toast.LENGTH_SHORT)
+                .show()
         }
     }
 
@@ -176,7 +241,7 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
                 Icon(
                     painter = painterResource(id = R.drawable.ic_bluetooth),
                     contentDescription = "Bluetooth",
-                    tint = if(isConnected.value)MaterialTheme.colorScheme.primary else Color.Gray,  // Use a contrasting color
+                    tint = if (isConnected.value) MaterialTheme.colorScheme.primary else Color.Gray,  // Use a contrasting color
                     modifier = Modifier
                         .size(40.dp)
                         .clickable(
@@ -214,157 +279,107 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
             // Headlights Toggle
             HeadLight(switchState) {
                 switchState = it
-                if(bluetoothPermissionState.allPermissionsGranted){
-                    if(isConnected.value){
-                        bluetoothManager.sendData("Headlights are on")
+                if (bluetoothPermissionState.allPermissionsGranted) {
+                    if (isConnected.value) {
+                        // Send appropriate message based on switchState
+                        if (switchState) {
+                            bluetoothManager.sendData("ON")
+                        } else {
+                            bluetoothManager.sendData("OFF")
+                        }
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Not connected to any device to send data",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
-                    else{
-                        Toast.makeText(context,"Not connected to any device to send data",Toast.LENGTH_SHORT).show()
-                    }
-                }
-                else{
-                    Toast.makeText(context,"Don't have permission to send data",Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        "Don't have permission to send data",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
-        }
 
-        // Map layout updated 9/22/24
-        Box(
-            modifier = Modifier
-                .padding(horizontal = 12.dp)
-                .fillMaxWidth()
-                .height(180.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .shadow(4.dp, RoundedCornerShape(8.dp))
-                .clickable {
-                    navController.navigate(Screens.MAPSCREEN.name)
-                },
-        ) {
-            if (locationPermissionState.status.isGranted) {
-                GoogleMap(
-                    modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraPositionState,
-                    onMapLoaded = {
-                        Toast.makeText(context, "map loaded", Toast.LENGTH_SHORT).show()
-                    }
-                )
-            } else {
-                Text(
-                    text = "Location permission required",
-                    modifier = Modifier.fillMaxSize(),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            Row(
+            // Map layout updated 9/22/24
+            Box(
                 modifier = Modifier
                     .padding(horizontal = 12.dp)
                     .fillMaxWidth()
+                    .height(180.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        MaterialTheme.colorScheme.primary
-                    )
+                    .shadow(4.dp, RoundedCornerShape(8.dp))
+                    .clickable {
+                        navController.navigate(Screens.MAPSCREEN.name)
+                    },
             ) {
-                Text(
-                    text = "Total Distance Traveled: $distanceTravelled Miles",
-                    color =  MaterialTheme.colorScheme.onPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(16.dp)
-                )
+                if (locationPermissionState.status.isGranted) {
+                    GoogleMap(
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPositionState = cameraPositionState,
+                        onMapLoaded = {
+                            Toast.makeText(context, "map loaded", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                } else {
+                    Text(
+                        text = "Location permission required",
+                        modifier = Modifier.fillMaxSize(),
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        MaterialTheme.colorScheme.primary
-                    )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(top = 8.dp)
             ) {
-                Text(
-                    text = "Ride Time: 58 Minutes",
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(16.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            MaterialTheme.colorScheme.primary
+                        )
+                ) {
+                    Text(
+                        text = "Total Distance Traveled: $distanceTravelled Miles",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            MaterialTheme.colorScheme.primary
+                        )
+                ) {
+                    Text(
+                        text = "Ride Time: 58 Minutes",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+
             }
 
         }
-
-    }
-}
-
-@Composable
-private fun HeadLight(switchState: Boolean = false, onSwitchChanged: (Boolean) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .padding(12.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = "Headlights",
-            fontSize = 18.sp,
-            color = MaterialTheme.colorScheme.onPrimary,
-            fontWeight = FontWeight.Medium
-        )
-        Switch(
-            checked = switchState,
-            onCheckedChange = onSwitchChanged,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Cyan, // Thumb color when switch is ON
-                uncheckedThumbColor = Color.Gray, // Thumb color when switch is OFF
-                checkedTrackColor = Color.DarkGray, // Track color when switch is ON
-                uncheckedTrackColor = Color.LightGray, // Track color when switch is OFF
-            )
-        )
     }
 }
 
 
-@Composable
-@Preview
-private fun HelmetImage() {
-    Image(
-        painter = painterResource(id = R.drawable.helmet_man_removebg), // Replace with your image resource
-        contentDescription = "Helmet",
-        modifier = Modifier.size(200.dp),
-        contentScale = ContentScale.Crop
-    )
-}
 
-@Composable
-@Preview(showBackground = true)
-private fun HeaderTitle() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start
-    ) {
-        Text(
-            text = "HelmetIQ",
-            fontSize = 30.sp,
-            fontStyle = FontStyle.Italic,
-            fontWeight = FontWeight.Black, // Use heavy, bold font for modern design
-            fontFamily = FontFamily.SansSerif, // Switch to modern sans-serif fonts
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 16.dp, start = 12.dp)
-
-        )
-    }
-}
 

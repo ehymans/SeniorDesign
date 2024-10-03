@@ -7,7 +7,7 @@
 #include "BluetoothSerial.h"
 
 BluetoothSerial SerialBT;
-bool isHeadlightOn = false; // Track the headlight status
+bool isHeadlightOn = true; // Track the headlight status
 
 // Define pins for touch sensors and LEDs (blinkers)
 const int leftTouchPin = 2;   // Left touch sensor
@@ -183,7 +183,8 @@ void handleHeadlightAndTailLight(void *param) {
     Serial.println(lux);
 
     // Set a threshold for low light to turn on the headlight and tail light
-    if (lux < 90.0 || isHeadlightOn) {  // Adjust threshold as needed and check Bluetooth override
+    if (lux < 90.0 && isHeadlightOn) {
+        // Adjust threshold as needed and check Bluetooth override
       digitalWrite(headlightPin, HIGH);  // Turn on headlight
       ledcWrite(tailLightPin, 50);  // 50% brightness for tail light
       Serial.println("Headlight ON and tail light at 50% brightness");
@@ -193,19 +194,10 @@ void handleHeadlightAndTailLight(void *param) {
       Serial.println("Headlight and tail light OFF");
     }
 
-    vTaskDelay(2000 / portTICK_PERIOD_MS);  // Check every 2 seconds
+    vTaskDelay(1000 / portTICK_PERIOD_MS);  // Check every 2 seconds
   }
 }
 
-
-void delayWithSensorCheck(int delayTime) {
-  unsigned long startTime = millis();
-  while (millis() - startTime < delayTime) {
-    // Let the system remain responsive and check for sensor states
-    // Insert code here if needed to handle other tasks
-    vTaskDelay(1 / portTICK_PERIOD_MS);  // Let other tasks run during the delay
-  }
-}
 
 
 // Threshold for collision detection (adjust as needed)
@@ -248,6 +240,7 @@ void handleCollisionDetection(void *param) {
     // Check if any delta exceeds the collision threshold
     if (deltaX > collisionThreshold || deltaY > collisionThreshold || deltaZ > collisionThreshold) {
       Serial.println("Collision detected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      SerialBT.println("COLLISION");
       inCollision = true;
       if(inCollision){
       // Blink all lights in hazard mode for collision indication
@@ -315,6 +308,9 @@ void handleCollisionDetection(void *param) {
 }
 
 void handleBluetooth(void *param) {
+  unsigned long lastHeartbeatTime = 0; // Store the time of the last heartbeat signal
+  const unsigned long heartbeatInterval = 5000; // 5 seconds heartbeat interval
+
   while (true) {
     // Check if data is available from the Android device
     if (SerialBT.available()) {
@@ -333,16 +329,24 @@ void handleBluetooth(void *param) {
         Serial.println(incomingData);
 
         // Toggle the headlight based on the received message
-        if (incomingData.equalsIgnoreCase("ON")) {
+        if (incomingData.equalsIgnoreCase("ON") || incomingData.equalsIgnoreCase("1")) {
           isHeadlightOn = true;
           Serial.println("Headlight turned ON");
-        } else if (incomingData.equalsIgnoreCase("OFF")) {
+        } else if (incomingData.equalsIgnoreCase("OFF") ||incomingData.equalsIgnoreCase("2") ) {
           isHeadlightOn = false;
           Serial.println("Headlight turned OFF");
         } else {
           Serial.println("Unrecognized command.");
         }
       }
+    }
+
+    // Send heartbeat signal every 5 seconds to keep the connection alive
+    unsigned long currentTime = millis();
+    if (currentTime - lastHeartbeatTime >= heartbeatInterval) {
+      SerialBT.println("HB"); // Send "HB" as a heartbeat signal
+      lastHeartbeatTime = currentTime; // Update the last heartbeat time
+      Serial.println("Heartbeat sent");
     }
 
     // Delay to prevent overwhelming the Bluetooth communication

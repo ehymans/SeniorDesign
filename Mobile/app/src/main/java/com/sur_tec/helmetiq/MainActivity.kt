@@ -34,24 +34,24 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 
+
 class MainActivity : ComponentActivity() {
     private lateinit var bluetoothViewModel: BluetoothViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        bluetoothViewModel=ViewModelProvider(this)[BluetoothViewModel::class.java]
+        bluetoothViewModel = ViewModelProvider(
+            this,
+            ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+        )[BluetoothViewModel::class.java]
         setContent {
             HelmetIQApp {
-                HelmetIQNavigation (bluetoothViewModel)
+                HelmetIQNavigation(bluetoothViewModel)
             }
         }
     }
 }
-
-
-
-
 
 @Composable
 fun HelmetIQApp(content: @Composable () -> Unit) {
@@ -59,27 +59,7 @@ fun HelmetIQApp(content: @Composable () -> Unit) {
         Surface(
             modifier = Modifier.fillMaxSize()
         ) {
-
             content()
         }
     }
 }
-
-/*  @Composable
-  fun Greeting(name: String, modifier: Modifier = Modifier) {
-      Text(
-          text = "Hello $name!",
-          modifier = modifier
-      )
-  }
-
-  @Preview(showBackground = true)
-  @Composable
-  fun GreetingPreview() {
-      HelmetIQTheme {
-          Greeting("Android")
-      }
-  }
-}
-
- */

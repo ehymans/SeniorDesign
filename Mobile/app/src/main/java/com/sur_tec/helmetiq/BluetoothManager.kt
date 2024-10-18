@@ -66,10 +66,12 @@ class BluetoothManager(private val context: Context) {
                         Manifest.permission.BLUETOOTH_CONNECT
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
+                    Log.e("Bluetooth", "BLUETOOTH_CONNECT permission not granted")
                     return@launch
                 }
 
                 bluetoothSocket = device.createRfcommSocketToServiceRecord(uuid)
+                bluetoothAdapter?.cancelDiscovery() // Cancel discovery before connecting
                 bluetoothSocket?.connect()
                 Log.d("Bluetooth", "Connected to ${device.name}")
                 withContext(Dispatchers.Main){
@@ -80,27 +82,33 @@ class BluetoothManager(private val context: Context) {
             catch (e: Exception)
             {
                 withContext(Dispatchers.Main){
-                    Toast.makeText(context,"Connected failed: ${e.message}",Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context,"Connection failed: ${e.message}",Toast.LENGTH_SHORT).show()
                     Log.e("Bluetooth", "Connection failed", e)
                 }
             }
         }
     }
 
-    fun sendData(data: String) {
+
+    fun sendData(data: String)
+    {
         bluetoothSocket?.let { socket ->
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val outputStream = socket.outputStream
-                    outputStream.write(data.toByteArray())
+                    val dataToSend = data.toByteArray()
+                    outputStream.write(dataToSend)
                     outputStream.flush()
-                    Log.d("Bluetooth", "Data sent: $data")
+                    Log.d("Bluetooth", "Data sent: ${dataToSend.contentToString()}")
                 } catch (e: Exception) {
                     Log.e("Bluetooth", "Failed to send data", e)
                 }
             }
+        } ?: run {
+            Log.e("Bluetooth", "Bluetooth socket is null, cannot send data")
         }
     }
+
 
     fun listenForData(onDataReceived: (String) -> Unit) {
         bluetoothSocket?.let { socket ->

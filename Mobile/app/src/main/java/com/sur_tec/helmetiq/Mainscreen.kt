@@ -66,8 +66,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextAlign
 
+
 @Composable
-fun HeadLight(switchState: Boolean = false, onSwitchChanged: (Boolean) -> Unit) {
+fun HeadLight(switchState: Boolean = true, onSwitchChanged: (Boolean) -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -88,20 +89,19 @@ fun HeadLight(switchState: Boolean = false, onSwitchChanged: (Boolean) -> Unit) 
             checked = switchState,
             onCheckedChange = onSwitchChanged,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Cyan, // Thumb color when switch is ON
-                uncheckedThumbColor = Color.Gray, // Thumb color when switch is OFF
-                checkedTrackColor = Color.DarkGray, // Track color when switch is ON
-                uncheckedTrackColor = Color.LightGray, // Track color when switch is OFF
+                checkedThumbColor = Color.Cyan,
+                uncheckedThumbColor = Color.Gray,
+                checkedTrackColor = Color.DarkGray,
+                uncheckedTrackColor = Color.LightGray,
             )
         )
     }
 }
 
 @Composable
-@Preview
 private fun HelmetImage() {
     Image(
-        painter = painterResource(id = R.drawable.helmet_man_removebg), // Replace with your image resource
+        painter = painterResource(id = R.drawable.helmet_man_removebg),
         contentDescription = "Helmet",
         modifier = Modifier.size(200.dp),
         contentScale = ContentScale.Crop
@@ -109,7 +109,6 @@ private fun HelmetImage() {
 }
 
 @Composable
-@Preview(showBackground = true)
 private fun HeaderTitle() {
     Row(
         modifier = Modifier
@@ -120,26 +119,27 @@ private fun HeaderTitle() {
             text = "HelmetIQ",
             fontSize = 30.sp,
             fontStyle = FontStyle.Italic,
-            fontWeight = FontWeight.Black, // Use heavy, bold font for modern design
-            fontFamily = FontFamily.SansSerif, // Switch to modern sans-serif fonts
+            fontWeight = FontWeight.Black,
+            fontFamily = FontFamily.SansSerif,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp, start = 12.dp)
-
         )
     }
 }
 
-
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,bluetoothViewModel: BluetoothViewModel) {
-
+fun Mainscreen(
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+    bluetoothViewModel: BluetoothViewModel
+) {
     val context = LocalContext.current
-    val isConnected =
-        bluetoothViewModel.isConnected.collectAsState() // Observing the connection state
+    val isConnected = bluetoothViewModel.isConnected.collectAsState() // Observing the connection state
     val distanceTravelled = bluetoothViewModel.distance.collectAsState().value
-    // Initialize BluetoothManager
-    val bluetoothManager = remember { BluetoothManager(context) }
+
+    // Use the BluetoothManager from the ViewModel
+    val bluetoothManager = bluetoothViewModel.bluetoothManager
 
     // Bluetooth permissions handling
     val bluetoothPermissionState = rememberMultiplePermissionsState(
@@ -158,21 +158,15 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
 
     var locationPermissionGranted by remember { mutableStateOf(false) }
 
-
-    //UPDATE DISTANCE TRAVELLED
-    LaunchedEffect(distanceTravelled) {
+    // Initialize Bluetooth when the composable is first composed
+    LaunchedEffect(Unit) {
         if (bluetoothPermissionState.allPermissionsGranted) {
-            if (isConnected.value) {
-                bluetoothManager.listenForData { data ->
-                    bluetoothViewModel.updateDistance(data)
-                }
+            bluetoothViewModel.initializeBluetooth(bluetoothPermissionState) {
+                Log.d("Bluetooth", "Connected to device")
+                // Connection status is updated in ViewModel
             }
-//            else{
-//                Toast.makeText(context,"Not connected to any device to receive data",Toast.LENGTH_SHORT).show()
-//            }
         } else {
-            Toast.makeText(context, "Don't have permission to receive data", Toast.LENGTH_SHORT)
-                .show()
+            bluetoothPermissionState.launchMultiplePermissionRequest()
         }
     }
 
@@ -182,42 +176,35 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
             locationPermissionState.launchPermissionRequest()
         }
         locationPermissionGranted = locationPermissionState.status.isGranted
-
     }
 
     if (locationPermissionGranted) {
-
-        fusedLocationClient?.lastLocation?.addOnSuccessListener { location ->
+        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
             location?.let {
                 userLocation = LatLng(it.latitude, it.longitude)
                 cameraPositionState.position = CameraPosition.fromLatLngZoom(userLocation!!, 15f)
-
             } ?: run {
                 Toast.makeText(context, "Unable to get location", Toast.LENGTH_SHORT).show()
             }
-
         }
     } else {
         LaunchedEffect(key1 = Unit) {
             locationPermissionState.launchPermissionRequest()
         }
         Text(text = "Location permission required", modifier = Modifier.fillMaxSize())
-
     }
 
     var switchState by rememberSaveable {
-        mutableStateOf(false)
+        mutableStateOf(true)
     }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(bottom = 12.dp)
             .verticalScroll(rememberScrollState()),
-
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
-
         HeaderTitle()
 
         Column(
@@ -230,18 +217,17 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
-
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_battery),
                     contentDescription = "Battery",
-                    tint = MaterialTheme.colorScheme.secondary,  // Use a bold primary color
-                    modifier = Modifier.size(40.dp)  // Larger icon size
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(40.dp)
                 )
                 Icon(
                     painter = painterResource(id = R.drawable.ic_bluetooth),
                     contentDescription = "Bluetooth",
-                    tint = if (isConnected.value) MaterialTheme.colorScheme.primary else Color.Gray,  // Use a contrasting color
+                    tint = if (isConnected.value) MaterialTheme.colorScheme.primary else Color.Gray,
                     modifier = Modifier
                         .size(40.dp)
                         .clickable(
@@ -250,44 +236,42 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
                             onClick = {
                                 if (bluetoothPermissionState.allPermissionsGranted) {
                                     if (!isConnected.value) {
-                                        bluetoothManager.initializeBluetooth(
+                                        bluetoothViewModel.initializeBluetooth(
                                             bluetoothPermissionState
                                         ) {
-                                            // Update connection state in ViewModel
                                             Log.d("Bluetooth", "Connected to device")
-                                            bluetoothViewModel.updateConnectionStatus(true)
-                                            bluetoothManager.listenForData { data ->
-                                                bluetoothViewModel.updateDistance(data)
-                                            }
+                                            // Connection status is updated in ViewModel
                                         }
                                     } else {
-                                        bluetoothManager.disconnect()
-                                        bluetoothViewModel.updateConnectionStatus(false) // Update connection state in ViewModel
+                                        bluetoothViewModel.disconnectBluetooth()
                                         Log.d("Bluetooth", "Disconnected")
-                                        bluetoothManager.listenForData { data ->
-                                            bluetoothViewModel.updateDistance(data)
-                                        }
                                     }
                                 } else {
                                     bluetoothPermissionState.launchMultiplePermissionRequest()
                                 }
                             }
-                        )  // Larger icon size
+                        )
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
+
             // Headlights Toggle
             HeadLight(switchState) {
                 switchState = it
                 if (bluetoothPermissionState.allPermissionsGranted) {
                     if (isConnected.value) {
                         // Send appropriate message based on switchState
-                        if (switchState) {
-                            bluetoothManager.sendData("ON")
-                        } else {
-                            bluetoothManager.sendData("OFF")
+                        if (switchState)
+                        {
+                            bluetoothManager.sendData("1")
                         }
-                    } else {
+                        else
+                        {
+                            bluetoothManager.sendData("2")
+                        }
+                    }
+                    else
+                    {
                         Toast.makeText(
                             context,
                             "Not connected to any device to send data",
@@ -295,15 +279,11 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
                         ).show()
                     }
                 } else {
-                    Toast.makeText(
-                        context,
-                        "Don't have permission to send data",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    bluetoothPermissionState.launchMultiplePermissionRequest()
                 }
             }
 
-            // Map layout updated 9/22/24
+            // Map layout
             Box(
                 modifier = Modifier
                     .padding(horizontal = 12.dp)
@@ -320,7 +300,7 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
                         modifier = Modifier.fillMaxSize(),
                         cameraPositionState = cameraPositionState,
                         onMapLoaded = {
-                            Toast.makeText(context, "map loaded", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Map loaded", Toast.LENGTH_SHORT).show()
                         }
                     )
                 } else {
@@ -373,13 +353,7 @@ fun Mainscreen(navController: NavHostController, modifier: Modifier = Modifier,b
                         modifier = Modifier.padding(16.dp)
                     )
                 }
-
             }
-
         }
     }
 }
-
-
-
-

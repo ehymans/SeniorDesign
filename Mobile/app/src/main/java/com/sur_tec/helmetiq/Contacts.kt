@@ -435,15 +435,15 @@ suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
         return
     }
 
-    val accountSid = "XXXXXX"
-    val authToken = "XXXXXX"
-    val fromNumber = "+XXXXXXXXXXXX"
+    val accountSid = "xxxxxxxxxxxxxxxx"
+    val authToken = "xxxxxxx"
+    val fromNumber = "xxxxxxxxxx"
 
     val client = OkHttpClient()
 
     contacts.forEach { contact ->
         val toNumber = contact.phoneNumber
-        val messageBody = "HelmetIQ Twilio API Test 9/25/24"
+        val messageBody = "HelmetIQ Collision Response Test 10/18"
 
         val url = "https://api.twilio.com/2010-04-01/Accounts/$accountSid/Messages.json"
 

@@ -7,8 +7,11 @@
 #include "BluetoothSerial.h"
 #include <Sparkfun_DRV2605L.h>
 
+#define TCA9548A_ADDRESS 0x70  // Address of the TCA9548A mux
+
 BluetoothSerial SerialBT;
-SFE_HMD_DRV2605L HMD;
+SFE_HMD_DRV2605L HMD1;  // Haptic motor 1
+SFE_HMD_DRV2605L HMD2;  // Haptic motor 2
 
 bool isHeadlightOn = true; // Track the headlight status
 
@@ -34,7 +37,7 @@ volatile bool rightFlash = false;
 // Last time touch sensors were triggered (for debouncing)
 volatile unsigned long lastLeftInterruptTime = 0;
 volatile unsigned long lastRightInterruptTime = 0;
-const unsigned long debounceDelay = 600;  // 300ms debounce delay
+const unsigned long debounceDelay = 600;  // 600ms debounce delay
 
 // Collision state variables
 bool inCollision = false;
@@ -52,16 +55,18 @@ Adafruit_MPU6050 mpu;
 float accelX = 0, accelY = 0, accelZ = 0;
 float prevAccelMagnitude = 0;  // To store the previous magnitude of acceleration
 
-
 // Function declarations
 void handleBlinkers(void *param);
-void blinkLED(int pin);
+void blinkLeftLED();
+void blinkRightLED();
 void handleHeadlightAndTailLight(void *param);
 void IRAM_ATTR leftTouchISR();
 void IRAM_ATTR rightTouchISR();
 void blinkBrakeLight(int blinks);
 //void handleDeceleration(void *param);
 void handleCollisionDetection(void *param);
+void handleBluetooth(void *param);
+void tcaSelect(uint8_t channel);  // Function to select the mux channel
 
 // FreeRTOS Task Handles
 TaskHandle_t blinkerTaskHandle;
@@ -78,28 +83,36 @@ void setup() {
   // Initialize the LED pins for the headlight as output
   pinMode(headlightPin, OUTPUT);
 
-  // Initialize PWM for the tail light
+  // Initialize PWM for the tail light (kept as in your original code)
   ledcAttach(tailLightPin, pwmFrequency, pwmResolution);  // Use new API to attach pin and set frequency/resolution
 
   // Start serial communication for debugging
   Serial.begin(115200);
 
-  //Initialize I2C for Haptic
+  // Initialize I2C for Haptic
   Wire.begin();  // Initialize I2C communication
 
-   if (!HMD.begin()) {
-    Serial.println("Failed to initialize DRV2605L");
+  // Initialize Haptic Motor 1
+  tcaSelect(0);  // Select mux channel 0
+  if (!HMD1.begin()) {
+    Serial.println("Failed to initialize DRV2605L on channel 0");
     while (1);
   }
+  HMD1.Mode(0);  // Internal trigger mode
+  HMD1.MotorSelect(0x36);  // ERM motor selected
+  HMD1.Library(1);  // Use library 1 (for ERM motors)
+  Serial.println("Haptic motor 1 initialized on channel 0");
 
-  Serial.println("DRV2605L initialized successfully!");
-
-  // Set the motor and mode configurations
-  HMD.Mode(0);  // Internal trigger mode
-  HMD.MotorSelect(0x36);  // ERM motor selected
-  HMD.Library(1);  // Use library 1 (for ERM motors)
-
-  Serial.println("Motor and mode set");
+  // Initialize Haptic Motor 2
+  tcaSelect(1);  // Select mux channel 1
+  if (!HMD2.begin()) {
+    Serial.println("Failed to initialize DRV2605L on channel 1");
+    while (1);
+  }
+  HMD2.Mode(0);  // Internal trigger mode
+  HMD2.MotorSelect(0x36);  // ERM motor selected
+  HMD2.Library(1);  // Use library 1 (for ERM motors)
+  Serial.println("Haptic motor 2 initialized on channel 1");
 
   // Initialize I2C communication with the VEML7700 sensor
   if (!veml.begin()) {
@@ -112,7 +125,7 @@ void setup() {
     Serial.println("Failed to find MPU6050 chip");
     while (1);
   }
-  
+
   // Set initial MPU6050 and VEML7700 sensor parameters
   veml.setGain(VEML7700_GAIN_1);
   veml.setIntegrationTime(VEML7700_IT_100MS);
@@ -129,17 +142,25 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(rightTouchPin), rightTouchISR, CHANGE);  // Trigger on any change
 
   // Create FreeRTOS tasks
-  xTaskCreatePinnedToCore(handleBlinkers, "BlinkerTask", 2048, NULL, 1, &blinkerTaskHandle, 0);
-  xTaskCreatePinnedToCore(handleHeadlightAndTailLight, "HeadlightTask", 2048, NULL, 1, &headlightTaskHandle, 0);
+  xTaskCreatePinnedToCore(handleBlinkers, "BlinkerTask", 4096, NULL, 1, &blinkerTaskHandle, 0);
+  xTaskCreatePinnedToCore(handleHeadlightAndTailLight, "HeadlightTask", 4096, NULL, 1, &headlightTaskHandle, 0);
   //xTaskCreatePinnedToCore(handleDeceleration, "DecelerationTask", 2048, NULL, 1, &decelerationTaskHandle, 0);
-  xTaskCreatePinnedToCore(handleCollisionDetection, "CollisionTask", 2048, NULL, 1, &collisionTaskHandle, 0);
-  xTaskCreatePinnedToCore(handleBluetooth, "BluetoothTask", 2048, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(handleCollisionDetection, "CollisionTask", 4096, NULL, 1, &collisionTaskHandle, 0);
+  xTaskCreatePinnedToCore(handleBluetooth, "BluetoothTask", 4096, NULL, 1, NULL, 0);
 
   Serial.println("System initialized.");
 }
 
 void loop() {
   // The logic is now handled within FreeRTOS tasks
+}
+
+// Function to select the mux channel
+void tcaSelect(uint8_t channel) {
+  if (channel > 7) return;
+  Wire.beginTransmission(TCA9548A_ADDRESS);
+  Wire.write(1 << channel);
+  Wire.endTransmission();
 }
 
 // ISR for left touch sensor (simplified)
@@ -169,7 +190,7 @@ void handleBlinkers(void *param) {
     if (leftFlash) {
       if (currentTime - lastLeftInterruptTime > debounceDelay) {
         Serial.println("Left blinker ON");
-        blinkLED(leftLedPin);
+        blinkLeftLED();
       }
     }
 
@@ -177,7 +198,7 @@ void handleBlinkers(void *param) {
     if (rightFlash) {
       if (currentTime - lastRightInterruptTime > debounceDelay) {
         Serial.println("Right blinker ON");
-        blinkLED(rightLedPin);
+        blinkRightLED();
       }
     }
 
@@ -185,16 +206,27 @@ void handleBlinkers(void *param) {
   }
 }
 
-// Function to blink the LED
-void blinkLED(int pin) {
-  digitalWrite(pin, HIGH);
-  HMD.Waveform(0, 1);  // Play effect #1
-  HMD.go();  // Trigger the  haptic motor
-  vTaskDelay(200 / portTICK_PERIOD_MS);  // Reduced delay for faster blinking
-  digitalWrite(pin, LOW); 
-  vTaskDelay(200 / portTICK_PERIOD_MS);  // Reduced delay for faster blinking
+// Function to blink the left LED and trigger haptic motor 1
+void blinkLeftLED() {
+  digitalWrite(leftLedPin, HIGH);
+  tcaSelect(0);  // Select mux channel 0
+  HMD1.Waveform(0, 1);  // Play effect #1
+  HMD1.go();  // Trigger the haptic motor
+  vTaskDelay(200 / portTICK_PERIOD_MS);  // Delay for blinking
+  digitalWrite(leftLedPin, LOW);
+  vTaskDelay(200 / portTICK_PERIOD_MS);  // Delay for blinking
 }
 
+// Function to blink the right LED and trigger haptic motor 2
+void blinkRightLED() {
+  digitalWrite(rightLedPin, HIGH);
+  tcaSelect(1);  // Select mux channel 1
+  HMD2.Waveform(0, 1);  // Play effect #1
+  HMD2.go();  // Trigger the haptic motor
+  vTaskDelay(200 / portTICK_PERIOD_MS);  // Delay for blinking
+  digitalWrite(rightLedPin, LOW);
+  vTaskDelay(200 / portTICK_PERIOD_MS);  // Delay for blinking
+}
 
 // FreeRTOS task for handling the headlight and tail light
 void handleHeadlightAndTailLight(void *param) {
@@ -206,7 +238,7 @@ void handleHeadlightAndTailLight(void *param) {
 
     // Set a threshold for low light to turn on the headlight and tail light
     if (lux < 90.0 && isHeadlightOn) {
-        // Adjust threshold as needed and check Bluetooth override
+      // Adjust threshold as needed and check Bluetooth override
       digitalWrite(headlightPin, HIGH);  // Turn on headlight
       ledcWrite(tailLightPin, 50);  // 50% brightness for tail light
       Serial.println("Headlight ON and tail light at 50% brightness");
@@ -216,19 +248,14 @@ void handleHeadlightAndTailLight(void *param) {
       Serial.println("Headlight and tail light OFF");
     }
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);  // Check every 2 seconds
+    vTaskDelay(1000 / portTICK_PERIOD_MS);  // Check every 1 second
   }
 }
 
-
-
 // Threshold for collision detection (adjust as needed)
 const float collisionThreshold = 14.0; // Adjust thresholds in all directions
-//const float collisionThresholdY = 12.0; // Adjust thresholds in all directions
-//const float collisionThresholdZ = 12.0; // Adjust thresholds in all directions
-const float immobileThreshold = 8.0; //modify with testing
-
-const float decelThreshold = 6.0; //Adjust when testing
+const float immobileThreshold = 8.0; // Modify with testing
+const float decelThreshold = 6.0; // Adjust when testing
 
 // Task for collision detection
 void handleCollisionDetection(void *param) {
@@ -248,65 +275,60 @@ void handleCollisionDetection(void *param) {
     accelY = a.acceleration.y;
     accelZ = a.acceleration.z;
 
-  // Print the current acceleration values and the deltas
-    Serial.print("Accel X: "); Serial.print(a.acceleration.x); 
+    // Print the current acceleration values and the deltas
+    Serial.print("Accel X: "); Serial.print(a.acceleration.x);
     Serial.print(", Delta X: "); Serial.println(deltaX);
 
-    Serial.print("Accel Y: "); Serial.print(a.acceleration.y); 
+    Serial.print("Accel Y: "); Serial.print(a.acceleration.y);
     Serial.print(", Delta Y: "); Serial.println(deltaY);
 
-    Serial.print("Accel Z: "); Serial.print(a.acceleration.z); 
+    Serial.print("Accel Z: "); Serial.print(a.acceleration.z);
     Serial.print(", Delta Z: "); Serial.println(deltaZ);
 
-    
     // Check if any delta exceeds the collision threshold
     if (deltaX > collisionThreshold || deltaY > collisionThreshold || deltaZ > collisionThreshold) {
-      Serial.println("Collision detected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      Serial.println("Collision detected!");
       SerialBT.println("69");
       inCollision = true;
-      if(inCollision){
-      // Blink all lights in hazard mode for collision indication
-      digitalWrite(leftLedPin, HIGH);
-      digitalWrite(rightLedPin, HIGH);
-      digitalWrite(headlightPin, HIGH);
-      ledcWrite(tailLightPin, 255); // Full brightness for tail light
-      vTaskDelay(300 / portTICK_PERIOD_MS);
-      digitalWrite(leftLedPin, LOW);
-      digitalWrite(rightLedPin, LOW);
-      digitalWrite(headlightPin, LOW);
-      ledcWrite(tailLightPin, 0);
-      vTaskDelay(300 / portTICK_PERIOD_MS);
-      digitalWrite(leftLedPin, HIGH);
-      digitalWrite(rightLedPin, HIGH);
-      digitalWrite(headlightPin, HIGH);
-      ledcWrite(tailLightPin, 255); // Full brightness for tail light
-      vTaskDelay(300 / portTICK_PERIOD_MS);
-      digitalWrite(leftLedPin, LOW);
-      digitalWrite(rightLedPin, LOW);
-      digitalWrite(headlightPin, LOW);
-      ledcWrite(tailLightPin, 0);
-      vTaskDelay(300 / portTICK_PERIOD_MS);
-      digitalWrite(leftLedPin, HIGH);
-      digitalWrite(rightLedPin, HIGH);
-      digitalWrite(headlightPin, HIGH);
-      ledcWrite(tailLightPin, 255); // Full brightness for tail light
-      vTaskDelay(300 / portTICK_PERIOD_MS);
-      digitalWrite(leftLedPin, LOW);
-      digitalWrite(rightLedPin, LOW);
-      digitalWrite(headlightPin, LOW);
-      ledcWrite(tailLightPin, 0);
-      vTaskDelay(300 / portTICK_PERIOD_MS);
-
-      
-      }  
-    } 
-    else if (deltaX > decelThreshold || deltaY > decelThreshold){
-      Serial.println("Slow down detected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      
+      if (inCollision) {
+        // Blink all lights in hazard mode for collision indication
+        digitalWrite(leftLedPin, HIGH);
+        digitalWrite(rightLedPin, HIGH);
+        digitalWrite(headlightPin, HIGH);
+        ledcWrite(tailLightPin, 255); // Full brightness for tail light
+        vTaskDelay(300 / portTICK_PERIOD_MS);
+        digitalWrite(leftLedPin, LOW);
+        digitalWrite(rightLedPin, LOW);
+        digitalWrite(headlightPin, LOW);
+        ledcWrite(tailLightPin, 0);
+        vTaskDelay(300 / portTICK_PERIOD_MS);
+        digitalWrite(leftLedPin, HIGH);
+        digitalWrite(rightLedPin, HIGH);
+        digitalWrite(headlightPin, HIGH);
+        ledcWrite(tailLightPin, 255); // Full brightness for tail light
+        vTaskDelay(300 / portTICK_PERIOD_MS);
+        digitalWrite(leftLedPin, LOW);
+        digitalWrite(rightLedPin, LOW);
+        digitalWrite(headlightPin, LOW);
+        ledcWrite(tailLightPin, 0);
+        vTaskDelay(300 / portTICK_PERIOD_MS);
+        digitalWrite(leftLedPin, HIGH);
+        digitalWrite(rightLedPin, HIGH);
+        digitalWrite(headlightPin, HIGH);
+        ledcWrite(tailLightPin, 255); // Full brightness for tail light
+        vTaskDelay(300 / portTICK_PERIOD_MS);
+        digitalWrite(leftLedPin, LOW);
+        digitalWrite(rightLedPin, LOW);
+        digitalWrite(headlightPin, LOW);
+        ledcWrite(tailLightPin, 0);
+        vTaskDelay(300 / portTICK_PERIOD_MS);
+      }
+    } else if (deltaX > decelThreshold || deltaY > decelThreshold) {
+      Serial.println("Slow down detected!");
       // Blink brake light
       ledcWrite(tailLightPin, 255); // Full brightness for tail light
       vTaskDelay(300 / portTICK_PERIOD_MS);
-   
+
       ledcWrite(tailLightPin, 0);
       vTaskDelay(300 / portTICK_PERIOD_MS);
 
@@ -315,15 +337,13 @@ void handleCollisionDetection(void *param) {
 
       ledcWrite(tailLightPin, 0);
       vTaskDelay(200 / portTICK_PERIOD_MS);
-  
+
       ledcWrite(tailLightPin, 255); // Full brightness for tail light
       vTaskDelay(200 / portTICK_PERIOD_MS);
- 
+
       ledcWrite(tailLightPin, 0);
       vTaskDelay(200 / portTICK_PERIOD_MS);
-    }
-
-    else {
+    } else {
       inCollision = false;
     }
 
@@ -339,7 +359,7 @@ void handleBluetooth(void *param) {
     // Check if data is available from the Android device
     if (SerialBT.available()) {
       String incomingData = "";
-      
+
       // Read incoming characters until a newline or return character is detected
       while (SerialBT.available()) {
         char c = SerialBT.read();
@@ -356,7 +376,7 @@ void handleBluetooth(void *param) {
         if (incomingData.equalsIgnoreCase("ON") || incomingData.equalsIgnoreCase("1")) {
           isHeadlightOn = true;
           Serial.println("Headlight turned ON");
-        } else if (incomingData.equalsIgnoreCase("OFF") ||incomingData.equalsIgnoreCase("2") ) {
+        } else if (incomingData.equalsIgnoreCase("OFF") || incomingData.equalsIgnoreCase("2")) {
           isHeadlightOn = false;
           Serial.println("Headlight turned OFF");
         } else {

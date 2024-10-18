@@ -5,8 +5,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "BluetoothSerial.h"
+#include <Sparkfun_DRV2605L.h>
 
 BluetoothSerial SerialBT;
+SFE_HMD_DRV2605L HMD;
+
 bool isHeadlightOn = true; // Track the headlight status
 
 // Define pins for touch sensors and LEDs (blinkers)
@@ -80,6 +83,23 @@ void setup() {
 
   // Start serial communication for debugging
   Serial.begin(115200);
+
+  //Initialize I2C for Haptic
+  Wire.begin();  // Initialize I2C communication
+
+   if (!HMD.begin()) {
+    Serial.println("Failed to initialize DRV2605L");
+    while (1);
+  }
+
+  Serial.println("DRV2605L initialized successfully!");
+
+  // Set the motor and mode configurations
+  HMD.Mode(0);  // Internal trigger mode
+  HMD.MotorSelect(0x36);  // ERM motor selected
+  HMD.Library(1);  // Use library 1 (for ERM motors)
+
+  Serial.println("Motor and mode set");
 
   // Initialize I2C communication with the VEML7700 sensor
   if (!veml.begin()) {
@@ -168,6 +188,8 @@ void handleBlinkers(void *param) {
 // Function to blink the LED
 void blinkLED(int pin) {
   digitalWrite(pin, HIGH);
+  HMD.Waveform(0, 1);  // Play effect #1
+  HMD.go();  // Trigger the  haptic motor
   vTaskDelay(200 / portTICK_PERIOD_MS);  // Reduced delay for faster blinking
   digitalWrite(pin, LOW);
   vTaskDelay(200 / portTICK_PERIOD_MS);  // Reduced delay for faster blinking
@@ -217,8 +239,8 @@ void handleCollisionDetection(void *param) {
     mpu.getEvent(&a, &g, &temp);
 
     // Calculate the delta for each axis
-    float deltaX = (a.acceleration.x - accelX);
-    float deltaY = (a.acceleration.y - accelY);
+    float deltaX = abs(a.acceleration.x - accelX);
+    float deltaY = abs(a.acceleration.y - accelY);
     float deltaZ = abs(a.acceleration.z - accelZ);
 
     // Update previous acceleration values

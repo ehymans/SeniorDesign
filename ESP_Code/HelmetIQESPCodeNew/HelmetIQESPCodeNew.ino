@@ -191,7 +191,7 @@ void blinkLED(int pin) {
   HMD.Waveform(0, 1);  // Play effect #1
   HMD.go();  // Trigger the  haptic motor
   vTaskDelay(200 / portTICK_PERIOD_MS);  // Reduced delay for faster blinking
-  digitalWrite(pin, LOW);
+  digitalWrite(pin, LOW); 
   vTaskDelay(200 / portTICK_PERIOD_MS);  // Reduced delay for faster blinking
 }
 
@@ -223,12 +223,12 @@ void handleHeadlightAndTailLight(void *param) {
 
 
 // Threshold for collision detection (adjust as needed)
-const float collisionThreshold = 12.0; // Adjust thresholds in all directions
+const float collisionThreshold = 14.0; // Adjust thresholds in all directions
 //const float collisionThresholdY = 12.0; // Adjust thresholds in all directions
 //const float collisionThresholdZ = 12.0; // Adjust thresholds in all directions
 const float immobileThreshold = 8.0; //modify with testing
 
-const float decelThreshold = 4.0; //Adjust when testing
+const float decelThreshold = 6.0; //Adjust when testing
 
 // Task for collision detection
 void handleCollisionDetection(void *param) {
@@ -262,7 +262,7 @@ void handleCollisionDetection(void *param) {
     // Check if any delta exceeds the collision threshold
     if (deltaX > collisionThreshold || deltaY > collisionThreshold || deltaZ > collisionThreshold) {
       Serial.println("Collision detected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      SerialBT.println("COLLISION");
+      SerialBT.println("69");
       inCollision = true;
       if(inCollision){
       // Blink all lights in hazard mode for collision indication
@@ -296,6 +296,8 @@ void handleCollisionDetection(void *param) {
       digitalWrite(headlightPin, LOW);
       ledcWrite(tailLightPin, 0);
       vTaskDelay(300 / portTICK_PERIOD_MS);
+
+      
       }  
     } 
     else if (deltaX > decelThreshold || deltaY > decelThreshold){

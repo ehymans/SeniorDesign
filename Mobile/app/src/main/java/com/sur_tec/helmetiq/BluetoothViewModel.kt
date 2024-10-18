@@ -7,8 +7,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.MultiplePermissionsState
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
 class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
@@ -22,6 +24,14 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     // StateFlow for distance
     private val _distance = MutableStateFlow("0")
     val distance: StateFlow<String> = _distance
+
+    sealed class BluetoothEvent
+    {
+        object CollisionDetected : BluetoothEvent()
+    }
+
+    private val _eventFlow = MutableSharedFlow<BluetoothEvent>()
+    val eventFlow = _eventFlow.asSharedFlow()
 
     // Function to update the connection status
     fun updateConnectionStatus(status: Boolean) {
@@ -46,10 +56,27 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // updated for collision flag 10/18
     private fun listenForData() {
         bluetoothManager.listenForData { data ->
-            updateDistance(data)
-            // You can add additional data handling here
+            if(data.trim() == "69")
+            {
+                viewModelScope.launch {
+                    _eventFlow.emit(BluetoothEvent.CollisionDetected)
+                }
+            }
+            else
+            {
+                updateDistance(data)
+            }
+        }
+    }
+
+    fun sendEmergencySms() {
+        viewModelScope.launch {
+            val context = getApplication<Application>().applicationContext
+            val contacts = PrefsHelper.loadContacts(context)
+            SmsHelper.sendEmergencySms(context, contacts)
         }
     }
 

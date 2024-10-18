@@ -202,7 +202,7 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
         // Add the "Test Emergency SMS" button
         Button(onClick = {
             coroutineScope.launch {
-                sendEmergencySms(context, contacts)
+                //sendEmergencySms(context, contacts)
             }
         }) {
             Text("Test Emergency SMS")
@@ -426,6 +426,7 @@ fun Header() {
     }
 }
 
+/*
 // Function to send emergency SMS using Twilio API
 suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
     if (contacts.isEmpty()) {
@@ -435,9 +436,9 @@ suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
         return
     }
 
-    val accountSid = "xxxxxxxxxxxxxxxx"
-    val authToken = "xxxxxxx"
-    val fromNumber = "xxxxxxxxxx"
+    val accountSid = "AC8e40e2c3ffd5f6700ec828ef89a8c059"
+    val authToken = "bb4845ed0181e22f1c1a7d0d4e9e9f00"
+    val fromNumber = "+18557586473"
 
     val client = OkHttpClient()
 
@@ -495,4 +496,4 @@ suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
             }
         }
     }
-}
+}*/

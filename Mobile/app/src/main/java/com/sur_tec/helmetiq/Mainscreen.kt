@@ -62,70 +62,15 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.sur_tec.helmetiq.navigation.Screens
 import com.sur_tec.helmetiq.ui.theme.customColors
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
-
-@Composable
-fun HeadLight(switchState: Boolean = true, onSwitchChanged: (Boolean) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .padding(12.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = "Headlights",
-            fontSize = 18.sp,
-            color = MaterialTheme.colorScheme.onPrimary,
-            fontWeight = FontWeight.Medium
-        )
-        Switch(
-            checked = switchState,
-            onCheckedChange = onSwitchChanged,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Cyan,
-                uncheckedThumbColor = Color.Gray,
-                checkedTrackColor = Color.DarkGray,
-                uncheckedTrackColor = Color.LightGray,
-            )
-        )
-    }
-}
-
-@Composable
-private fun HelmetImage() {
-    Image(
-        painter = painterResource(id = R.drawable.helmet_man_removebg),
-        contentDescription = "Helmet",
-        modifier = Modifier.size(200.dp),
-        contentScale = ContentScale.Crop
-    )
-}
-
-@Composable
-private fun HeaderTitle() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start
-    ) {
-        Text(
-            text = "HelmetIQ",
-            fontSize = 30.sp,
-            fontStyle = FontStyle.Italic,
-            fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.SansSerif,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 16.dp, start = 12.dp)
-        )
-    }
-}
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -135,11 +80,9 @@ fun Mainscreen(
     bluetoothViewModel: BluetoothViewModel
 ) {
     val context = LocalContext.current
-    val isConnected = bluetoothViewModel.isConnected.collectAsState() // Observing the connection state
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val isConnected = bluetoothViewModel.isConnected.collectAsState()
     val distanceTravelled = bluetoothViewModel.distance.collectAsState().value
-
-    // Use the BluetoothManager from the ViewModel
-    val bluetoothManager = bluetoothViewModel.bluetoothManager
 
     // Bluetooth permissions handling
     val bluetoothPermissionState = rememberMultiplePermissionsState(
@@ -150,6 +93,7 @@ fun Mainscreen(
         )
     )
 
+    // Location permissions handling
     val locationPermissionState =
         rememberPermissionState(permission = Manifest.permission.ACCESS_FINE_LOCATION)
     val cameraPositionState = rememberCameraPositionState()
@@ -157,6 +101,13 @@ fun Mainscreen(
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
 
     var locationPermissionGranted by remember { mutableStateOf(false) }
+
+    // Collision dialog state
+    var showCollisionDialog by remember { mutableStateOf(false) }
+    var timer by remember { mutableStateOf(30) }
+
+    // Headlights switch state
+    var switchState by rememberSaveable { mutableStateOf(true) }
 
     // Initialize Bluetooth when the composable is first composed
     LaunchedEffect(Unit) {
@@ -170,6 +121,33 @@ fun Mainscreen(
         }
     }
 
+    // Observe Bluetooth events for collision detection
+    LaunchedEffect(Unit) {
+        bluetoothViewModel.eventFlow.collectLatest { event ->
+            when (event) {
+                is BluetoothViewModel.BluetoothEvent.CollisionDetected -> {
+                    showCollisionDialog = true
+                    timer = 10
+                }
+            }
+        }
+    }
+
+    // Timer for collision dialog
+    LaunchedEffect(showCollisionDialog) {
+        if (showCollisionDialog) {
+            while (timer > 0) {
+                delay(1000L)
+                timer -= 1
+            }
+            if (showCollisionDialog) {
+                showCollisionDialog = false
+                bluetoothViewModel.sendEmergencySms()
+            }
+        }
+    }
+
+    // Location permission handling
     LaunchedEffect(key1 = locationPermissionState.status.isGranted) {
         if (!locationPermissionGranted) {
             // Ask for location permission
@@ -191,11 +169,6 @@ fun Mainscreen(
         LaunchedEffect(key1 = Unit) {
             locationPermissionState.launchPermissionRequest()
         }
-        Text(text = "Location permission required", modifier = Modifier.fillMaxSize())
-    }
-
-    var switchState by rememberSaveable {
-        mutableStateOf(true)
     }
 
     Column(
@@ -261,17 +234,12 @@ fun Mainscreen(
                 if (bluetoothPermissionState.allPermissionsGranted) {
                     if (isConnected.value) {
                         // Send appropriate message based on switchState
-                        if (switchState)
-                        {
-                            bluetoothManager.sendData("1")
+                        if (switchState) {
+                            bluetoothViewModel.bluetoothManager.sendData("1")
+                        } else {
+                            bluetoothViewModel.bluetoothManager.sendData("2")
                         }
-                        else
-                        {
-                            bluetoothManager.sendData("2")
-                        }
-                    }
-                    else
-                    {
+                    } else {
                         Toast.makeText(
                             context,
                             "Not connected to any device to send data",
@@ -300,7 +268,7 @@ fun Mainscreen(
                         modifier = Modifier.fillMaxSize(),
                         cameraPositionState = cameraPositionState,
                         onMapLoaded = {
-                            Toast.makeText(context, "Map loaded", Toast.LENGTH_SHORT).show()
+                            // Map loaded
                         }
                     )
                 } else {
@@ -356,4 +324,104 @@ fun Mainscreen(
             }
         }
     }
+
+    // Collision Dialog
+    if (showCollisionDialog) {
+        CollisionDialog(
+            timer = timer,
+            onConfirm = {
+                showCollisionDialog = false
+                // Additional logic if needed
+                Toast.makeText(context, "Stay safe!", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = {
+                showCollisionDialog = false
+                // Additional logic if needed
+                bluetoothViewModel.sendEmergencySms()
+            }
+        )
+    }
+}
+
+@Composable
+fun HeadLight(switchState: Boolean = true, onSwitchChanged: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(12.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "Headlights",
+            fontSize = 18.sp,
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontWeight = FontWeight.Medium
+        )
+        Switch(
+            checked = switchState,
+            onCheckedChange = onSwitchChanged,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.Cyan,
+                uncheckedThumbColor = Color.Gray,
+                checkedTrackColor = Color.DarkGray,
+                uncheckedTrackColor = Color.LightGray,
+            )
+        )
+    }
+}
+
+@Composable
+private fun HelmetImage() {
+    Image(
+        painter = painterResource(id = R.drawable.helmet_man_removebg),
+        contentDescription = "Helmet",
+        modifier = Modifier.size(200.dp),
+        contentScale = ContentScale.Crop
+    )
+}
+
+@Composable
+private fun HeaderTitle() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Text(
+            text = "HelmetIQ",
+            fontSize = 30.sp,
+            fontStyle = FontStyle.Italic,
+            fontWeight = FontWeight.Black,
+            fontFamily = FontFamily.SansSerif,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 16.dp, start = 12.dp)
+        )
+    }
+}
+
+@Composable
+fun CollisionDialog(
+    timer: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { /* Prevent dismissing by clicking outside */ },
+        title = { Text("Possible Collision Detected") },
+        text = { Text("Were you involved in a collision? ($timer seconds left)") },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("No")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Yes, send SMS")
+            }
+        }
+    )
 }

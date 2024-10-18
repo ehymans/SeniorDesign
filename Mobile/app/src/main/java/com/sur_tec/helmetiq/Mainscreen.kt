@@ -109,17 +109,18 @@ fun Mainscreen(
     // Headlights switch state
     var switchState by rememberSaveable { mutableStateOf(true) }
 
-    // Initialize Bluetooth when the composable is first composed
     LaunchedEffect(Unit) {
-        if (bluetoothPermissionState.allPermissionsGranted) {
-            bluetoothViewModel.initializeBluetooth(bluetoothPermissionState) {
-                Log.d("Bluetooth", "Connected to device")
-                // Connection status is updated in ViewModel
+        if (!bluetoothViewModel.isConnected.value) {  // to prevent constant reconnects
+            if (bluetoothPermissionState.allPermissionsGranted) {
+                bluetoothViewModel.initializeBluetooth(bluetoothPermissionState) {
+                    Log.d("Bluetooth", "Connected to device")
+                }
+            } else {
+                bluetoothPermissionState.launchMultiplePermissionRequest()
             }
-        } else {
-            bluetoothPermissionState.launchMultiplePermissionRequest()
         }
     }
+
 
     // Observe Bluetooth events for collision detection
     LaunchedEffect(Unit) {
@@ -403,6 +404,7 @@ private fun HeaderTitle() {
     }
 }
 
+/*on main screen dialog pop-up when collision occurs (a drop for ex)*/
 @Composable
 fun CollisionDialog(
     timer: Int,

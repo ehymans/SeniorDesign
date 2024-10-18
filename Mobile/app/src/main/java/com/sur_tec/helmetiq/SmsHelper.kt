@@ -21,9 +21,9 @@ object SmsHelper {
             return
         }
 
-        val accountSid = "AC8e40e2c3ffd5f6700ec828ef89a8c059"
-        val authToken = "bb4845ed0181e22f1c1a7d0d4e9e9f00"
-        val fromNumber = "+18557586473"
+        val accountSid = "xxx"
+        val authToken = "xxx"
+        val fromNumber = "xxx"
 
 
         val messageBody = "HelmetIQ Midterm Demo: Emergency! The user may have been involved in a collision!"

@@ -66,6 +66,8 @@ import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
+import android.view.Gravity
+
 
 data class Contact(val name: String, val phoneNumber: String)
 
@@ -159,6 +161,7 @@ fun ContactDialog(
         }
     }
 }
+
 @Composable
 fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -169,6 +172,8 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
     var showEditContactDialog by remember { mutableStateOf(false) }
     var contacts by remember { mutableStateOf(listOf<Contact>()) }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
+
+    var toastMessage by remember { mutableStateOf<String?>(null) }  // to keep toast messages at bottom of screen !
 
     // Load contacts from SharedPreferences when composable is first launched
     LaunchedEffect(Unit) {
@@ -218,7 +223,8 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
                 contacts = contacts + newContact
                 PrefsHelper.saveContacts(context, contacts)
                 showNewContactDialog = false
-                Toast.makeText(context, "Contact added", Toast.LENGTH_SHORT).show()
+                //Toast.makeText(context, "Contact added", Toast.LENGTH_SHORT).show()
+                toastMessage = "Contact Added!"
             },
             onDelete = { } // Not used for new contacts
         )
@@ -234,15 +240,26 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
                 }
                 PrefsHelper.saveContacts(context, contacts)
                 showEditContactDialog = false
-                Toast.makeText(context, "Contact updated", Toast.LENGTH_SHORT).show()
+                //Toast.makeText(context, "Contact updated", Toast.LENGTH_SHORT).show()
+                toastMessage = "Contact Updated."
             },
             onDelete = {
                 contacts = contacts.filter { it != selectedContact }
                 PrefsHelper.saveContacts(context, contacts)
                 showEditContactDialog = false
-                Toast.makeText(context, "Contact deleted", Toast.LENGTH_SHORT).show()
+                //Toast.makeText(context, "Contact deleted", Toast.LENGTH_SHORT).show()
+                toastMessage = "Contact Deleted."
             }
         )
+    }
+
+    LaunchedEffect(toastMessage) {
+        toastMessage?.let {
+            // Use your custom function to show the Toast at the bottom
+            showBottomToast(context, it)
+            // Reset the toastMessage to avoid showing it again
+            toastMessage = null
+        }
     }
 }
 
@@ -426,74 +443,9 @@ fun Header() {
     }
 }
 
-/*
-// Function to send emergency SMS using Twilio API
-suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
-    if (contacts.isEmpty()) {
-        withContext(Dispatchers.Main) {
-            Toast.makeText(context, "No contacts to send SMS to.", Toast.LENGTH_SHORT).show()
-        }
-        return
+fun showBottomToast(context: Context, message: String, duration: Int = Toast.LENGTH_SHORT) {
+    Toast.makeText(context, message, duration).apply {
+        setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 100)
+        show()
     }
-
-    val accountSid = "AC8e40e2c3ffd5f6700ec828ef89a8c059"
-    val authToken = "bb4845ed0181e22f1c1a7d0d4e9e9f00"
-    val fromNumber = "+18557586473"
-
-    val client = OkHttpClient()
-
-    contacts.forEach { contact ->
-        val toNumber = contact.phoneNumber
-        val messageBody = "HelmetIQ Collision Response Test 10/18"
-
-        val url = "https://api.twilio.com/2010-04-01/Accounts/$accountSid/Messages.json"
-
-        val formBody = FormBody.Builder()
-            .add("To", toNumber)
-            .add("From", fromNumber)
-            .add("Body", messageBody)
-            .build()
-
-        val credential = Credentials.basic(accountSid, authToken)
-
-        val request = Request.Builder()
-            .url(url)
-            .post(formBody)
-            .header("Authorization", credential)
-            .build()
-
-        try {
-            val response = withContext(Dispatchers.IO) {
-                client.newCall(request).execute()
-            }
-            val responseBody = response.body?.string()
-            if (!response.isSuccessful) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        context,
-                        "Failed to send message to ${contact.name}: ${response.code} - $responseBody",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Message sent to ${contact.name}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                val errorMessage = when (e) {
-                    is IOException -> "Network error: ${e.message}"
-                    is IllegalArgumentException -> "Invalid argument: ${e.message}"
-                    else -> "Unexpected error: ${e.javaClass.simpleName} - ${e.message}"
-                }
-                Toast.makeText(
-                    context,
-                    "Error sending message to ${contact.name}: $errorMessage",
-                    Toast.LENGTH_LONG
-                ).show()
-                e.printStackTrace() // This will print the full stack trace to logcat
-            }
-        }
-    }
-}*/
+}

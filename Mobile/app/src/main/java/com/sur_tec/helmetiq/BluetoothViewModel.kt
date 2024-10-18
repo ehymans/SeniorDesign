@@ -43,11 +43,15 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         _distance.value = newDistance
     }
 
+    private var isBluetoothInitialized = false
+
     @OptIn(ExperimentalPermissionsApi::class)
     fun initializeBluetooth(
         bluetoothPermissionState: MultiplePermissionsState,
         onConnected: () -> Unit
     ) {
+        if(isBluetoothInitialized) return
+        isBluetoothInitialized = true
         bluetoothManager.initializeBluetooth(bluetoothPermissionState) {
             // On connected
             updateConnectionStatus(true)

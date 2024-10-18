@@ -134,7 +134,7 @@ void setup() {
   // Set accelerometer range
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
 
-  SerialBT.begin("ESP32_BT"); // Name for the Bluetooth device
+  SerialBT.begin("HelmetIQ"); // Name for the Bluetooth device
   Serial.println("Bluetooth Started! Waiting for connection...");
 
   // Attach hardware interrupts for touch sensors

@@ -48,13 +48,13 @@ class BluetoothManager(private val context: Context) {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
         }
-        bluetoothDevice = bluetoothAdapter?.bondedDevices?.find { it.name == "ESP32_BT" }
+        bluetoothDevice = bluetoothAdapter?.bondedDevices?.find { it.name == "HelmetIQ" }
         if (bluetoothDevice != null) {
-            Log.d("Bluetooth", "ESP32 device found: ${bluetoothDevice?.name}, ${bluetoothDevice?.address}")
+            Log.d("Bluetooth", "HelmetIQ device found: ${bluetoothDevice?.name}, ${bluetoothDevice?.address}")
             connectToDevice(bluetoothDevice!!, onConnected)
         } else {
             Log.e("Bluetooth", "ESP32 device not found")
-            Toast.makeText(context, "ESP32 device not found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "HelmetIQ device not found", Toast.LENGTH_SHORT).show()
         }
     }
 

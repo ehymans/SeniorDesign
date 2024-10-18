@@ -82,7 +82,7 @@ fun Mainscreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val isConnected = bluetoothViewModel.isConnected.collectAsState()
-    val distanceTravelled = bluetoothViewModel.distance.collectAsState().value
+    //val distanceTravelled = bluetoothViewModel.distance.collectAsState().value
 
     // Bluetooth permissions handling
     val bluetoothPermissionState = rememberMultiplePermissionsState(
@@ -296,7 +296,7 @@ fun Mainscreen(
                         )
                 ) {
                     Text(
-                        text = "Total Distance Traveled: $distanceTravelled Miles",
+                        text = "Total Distance Traveled: N/A",
                         color = MaterialTheme.colorScheme.onPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Medium,
@@ -315,7 +315,7 @@ fun Mainscreen(
                         )
                 ) {
                     Text(
-                        text = "Ride Time: 58 Minutes",
+                        text = "Ride Time: N/A",
                         color = MaterialTheme.colorScheme.onPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Medium,

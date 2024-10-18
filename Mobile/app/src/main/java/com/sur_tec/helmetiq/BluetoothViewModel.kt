@@ -22,8 +22,8 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     val isConnected: StateFlow<Boolean> = _isConnected
 
     // StateFlow for distance
-    private val _distance = MutableStateFlow("0")
-    val distance: StateFlow<String> = _distance
+    //private val _distance = MutableStateFlow("0")
+    //val distance: StateFlow<String> = _distance
 
     sealed class BluetoothEvent
     {
@@ -38,10 +38,13 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         _isConnected.value = status
     }
 
+    /*
     // Function to update the distance
     fun updateDistance(newDistance: String) {
         _distance.value = newDistance
     }
+    */
+
 
     private var isBluetoothInitialized = false
 
@@ -68,10 +71,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 viewModelScope.launch {
                     _eventFlow.emit(BluetoothEvent.CollisionDetected)
                 }
-            }
-            else
-            {
-                updateDistance(data)
             }
         }
     }

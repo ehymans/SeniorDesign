@@ -1,0 +1,53 @@
+#define LEFT_TOUCH_PIN 27     // GPIO for the left touch sensor
+#define RIGHT_TOUCH_PIN 4   // GPIO for the right touch sensor
+
+volatile int leftTouchCount = 0;       // Counter for left touch sensor
+volatile int rightTouchCount = 0;      // Counter for right touch sensor
+unsigned long lastLeftTouchTime = 0;   // Last activation time for debounce
+unsigned long lastRightTouchTime = 0;  // Last activation time for debounce
+const unsigned long debounceDelay = 200;  // Debounce delay in milliseconds
+
+void IRAM_ATTR leftTouchISR();
+void IRAM_ATTR rightTouchISR();
+
+void setup() {
+  Serial.begin(115200);
+
+  // Attach interrupts to the touch sensors
+  attachInterrupt(digitalPinToInterrupt(LEFT_TOUCH_PIN), leftTouchISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_TOUCH_PIN), rightTouchISR, FALLING);
+
+  Serial.println("Touch sensor test initialized. Waiting for touch inputs...");
+}
+
+void loop() {
+  // Print the counts for both sensors every second
+  Serial.print("Left Touch Count: ");
+  Serial.println(leftTouchCount);
+  Serial.print("Right Touch Count: ");
+  Serial.println(rightTouchCount);
+
+  delay(1000);  // Update output every second
+}
+
+// Interrupt Service Routine (ISR) for the left touch sensor
+void IRAM_ATTR leftTouchISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastLeftTouchTime > debounceDelay) {  // Debounce check
+    leftTouchCount++;  // Increment the left touch counter
+    lastLeftTouchTime = currentTime;
+    Serial.print("Left touch detected! Count: ");
+    Serial.println(leftTouchCount);
+  }
+}
+
+// Interrupt Service Routine (ISR) for the right touch sensor
+void IRAM_ATTR rightTouchISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastRightTouchTime > debounceDelay) {  // Debounce check
+    rightTouchCount++;  // Increment the right touch counter
+    lastRightTouchTime = currentTime;
+    Serial.print("Right touch detected! Count: ");
+    Serial.println(rightTouchCount);
+  }
+}

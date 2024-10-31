@@ -76,6 +76,10 @@ TaskHandle_t collisionTaskHandle;
 
 // Setup function
 void setup() {
+
+    SerialBT.begin("HelmetIQ"); // Name for the Bluetooth device
+  Serial.println("Bluetooth Started! Waiting for connection...");
+  
   // Initialize the LED pins for blinkers as output
   pinMode(leftLedPin, OUTPUT);
   pinMode(rightLedPin, OUTPUT);
@@ -134,7 +138,7 @@ void setup() {
   IMU.startGyro(100,2000);
   // Wait IMU to start
   delay(100);
-}
+
 
   // Set initial MPU6050 and VEML7700 sensor parameters
   veml.setGain(VEML7700_GAIN_1);
@@ -142,8 +146,6 @@ void setup() {
   veml.powerSaveEnable(true);
 
 
-  SerialBT.begin("HelmetIQ"); // Name for the Bluetooth device
-  Serial.println("Bluetooth Started! Waiting for connection...");
 
   // Attach hardware interrupts for touch sensors
   attachInterrupt(digitalPinToInterrupt(leftTouchPin), leftTouchISR, FALLING);  // Trigger on any change

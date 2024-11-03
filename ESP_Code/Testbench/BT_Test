@@ -1,1 +1,70 @@
+#include "BluetoothSerial.h"
+#include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
+
+BluetoothSerial SerialBT;
+TaskHandle_t mainTaskHandle = NULL;
+unsigned long previousMillis = 0;  // Store last time message was sent
+const long interval = 1000;        // Message interval (1 second)
+int counter = 0;                   // Message counter
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Get the current task handle
+    mainTaskHandle = xTaskGetCurrentTaskHandle();
+    
+    // Initialize and configure WDT
+    esp_task_wdt_config_t wdt_config = {
+        .timeout_ms = 30000,          // 30 second timeout
+        .idle_core_mask = (1 << 0),   // Watch CPU 0
+        .trigger_panic = true         // Trigger panic on timeout
+    };
+    esp_task_wdt_init(&wdt_config);
+    
+    // Subscribe this task to WDT
+    if (mainTaskHandle != NULL) {
+        esp_task_wdt_add(mainTaskHandle);
+    }
+    
+    SerialBT.begin("ESP32test");
+    Serial.println("The device started, now you can pair it with bluetooth!");
+}
+
+void loop() {
+    // Reset watchdog
+    if (mainTaskHandle != NULL) {
+        esp_task_wdt_reset();
+    }
+    
+    // Current time
+    unsigned long currentMillis = millis();
+    
+    // Send message every interval
+    if (currentMillis - previousMillis >= interval) {
+        previousMillis = currentMillis;
+        
+        // Create test message with counter
+        String message = "ESP32 Test Message #" + String(counter++);
+        SerialBT.println(message);
+        
+        // Also print to Serial for debugging
+        Serial.println("Sent: " + message);
+    }
+    
+    // Handle normal Serial/Bluetooth communication
+    if (Serial.available()) {
+        SerialBT.write(Serial.read());
+    }
+    
+    if (SerialBT.available()) {
+        Serial.write(SerialBT.read());
+    }
+    
+    delay(20);
+}

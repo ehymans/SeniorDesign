@@ -1,0 +1,80 @@
+#include "BluetoothSerial.h"
+#include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
+
+BluetoothSerial SerialBT;
+TaskHandle_t mainTaskHandle = NULL;
+
+// Define LED pin - most ESP32 DevKits use GPIO 2 for the built-in LED
+const int LED_PIN = 2;
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Configure LED pin
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);  // Start with LED off
+    
+    // Get the current task handle
+    mainTaskHandle = xTaskGetCurrentTaskHandle();
+    
+    // Initialize and configure WDT
+    esp_task_wdt_config_t wdt_config = {
+        .timeout_ms = 30000,          // 30 second timeout
+        .idle_core_mask = (1 << 0),   // Watch CPU 0
+        .trigger_panic = true         // Trigger panic on timeout
+    };
+    esp_task_wdt_init(&wdt_config);
+    
+    // Subscribe this task to WDT
+    if (mainTaskHandle != NULL) {
+        esp_task_wdt_add(mainTaskHandle);
+    }
+    
+    SerialBT.begin("ESP32test");
+    Serial.println("The device started, now you can pair it with bluetooth!");
+    Serial.println("Press '1' to turn LED ON");
+    Serial.println("Press '0' to turn LED OFF");
+}
+
+void loop() {
+    // Reset watchdog
+    if (mainTaskHandle != NULL) {
+        esp_task_wdt_reset();
+    }
+    
+    // Check for Bluetooth data
+    if (SerialBT.available()) {
+        char incomingChar = SerialBT.read();
+        
+        // Also echo the character to Serial monitor
+        Serial.print("Received: ");
+        Serial.println(incomingChar);
+        
+        // Control LED based on input
+        switch(incomingChar) {
+            case '1':
+                digitalWrite(LED_PIN, HIGH);  // Turn LED on
+                SerialBT.println("LED ON");
+                Serial.println("LED ON");
+                break;
+            case '0':
+                digitalWrite(LED_PIN, LOW);   // Turn LED off
+                SerialBT.println("LED OFF");
+                Serial.println("LED OFF");
+                break;
+        }
+    }
+    
+    // Handle Serial to Bluetooth communication
+    if (Serial.available()) {
+        SerialBT.write(Serial.read());
+    }
+    
+    delay(20);
+}

@@ -1,0 +1,126 @@
+#include "ICM42670P.h"
+#include "Adafruit_VEML7700.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "BluetoothSerial.h"
+#include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#define LEFT_TOUCH_PIN 27     // GPIO for the left touch sensor
+#define RIGHT_TOUCH_PIN 4     // GPIO for the right touch sensor
+#define HEADLIGHT_PIN 32
+#define TAILLIGHT_PIN 13
+#define LEFT_BLINKER 33
+#define RIGHT_BLINKER 16
+
+// PWM settings for the tail light
+const int pwmFrequency = 5000; // PWM frequency
+const int pwmResolution = 8;   // 8-bit resolution (0-255 for duty cycle)
+
+// Instantiate an ICM42670 with LSB address set to 0
+ICM42670 IMU(Wire, 0);
+Adafruit_VEML7700 veml = Adafruit_VEML7700();
+
+void setup() {
+  // Initialize Serial for debugging
+  Serial.begin(115200);
+  while (!Serial) { delay(10); }
+
+  // Initialize ICM42670
+  int ret = IMU.begin();
+  if (ret != 0) {
+    Serial.print("ICM42670 initialization failed: ");
+    Serial.println(ret);
+    while (1);
+  }
+  // Configure IMU
+  IMU.startAccel(100, 16);  // Accel ODR = 100 Hz, Full Scale Range = 16G
+  IMU.startGyro(100, 2000); // Gyro ODR = 100 Hz, Full Scale Range = 2000 dps
+  delay(100); // Allow IMU to start
+
+  // Initialize VEML7700
+  Serial.println("Adafruit VEML7700 Test");
+  if (!veml.begin()) {
+    Serial.println("VEML7700 sensor not found");
+    while (1);
+  }
+  Serial.println("VEML7700 sensor found");
+
+  // Print VEML7700 gain and integration time
+  Serial.print(F("Gain: "));
+  switch (veml.getGain()) {
+    case VEML7700_GAIN_1: Serial.println("1"); break;
+    case VEML7700_GAIN_2: Serial.println("2"); break;
+    case VEML7700_GAIN_1_4: Serial.println("1/4"); break;
+    case VEML7700_GAIN_1_8: Serial.println("1/8"); break;
+  }
+
+  Serial.print(F("Integration Time (ms): "));
+  switch (veml.getIntegrationTime()) {
+    case VEML7700_IT_25MS: Serial.println("25"); break;
+    case VEML7700_IT_50MS: Serial.println("50"); break;
+    case VEML7700_IT_100MS: Serial.println("100"); break;
+    case VEML7700_IT_200MS: Serial.println("200"); break;
+    case VEML7700_IT_400MS: Serial.println("400"); break;
+    case VEML7700_IT_800MS: Serial.println("800"); break;
+  }
+
+  veml.setLowThreshold(10000);
+  veml.setHighThreshold(20000);
+  veml.interruptEnable(true);
+
+  // Initialize the LED pin for the headlight as output
+  pinMode(HEADLIGHT_PIN, OUTPUT);
+  digitalWrite(HEADLIGHT_PIN, LOW); // Ensure the headlight is off initially
+}
+
+void loop() {
+  // Read data from ICM42670
+  inv_imu_sensor_event_t imu_event;
+  IMU.getDataFromRegisters(imu_event);
+
+  // Print IMU data
+  Serial.print("AccelX:");
+  Serial.println(imu_event.accel[0]);
+  Serial.print("AccelY:");
+  Serial.println(imu_event.accel[1]);
+  Serial.print("AccelZ:");
+  Serial.println(imu_event.accel[2]);
+  Serial.print("GyroX:");
+  Serial.println(imu_event.gyro[0]);
+  Serial.print("GyroY:");
+  Serial.println(imu_event.gyro[1]);
+  Serial.print("GyroZ:");
+  Serial.println(imu_event.gyro[2]);
+  Serial.print("Temperature:");
+  Serial.println(imu_event.temperature);
+
+  // Print VEML7700 data
+  float lux = veml.readLux();
+  Serial.print("raw ALS: ");
+  Serial.println(veml.readALS());
+  Serial.print("raw white: ");
+  Serial.println(veml.readWhite());
+  Serial.print("lux: ");
+  Serial.println(lux);
+
+  // Turn on the headlight if lux is below 90
+  if (lux < 90) {
+    digitalWrite(HEADLIGHT_PIN, HIGH);
+  } else {
+    digitalWrite(HEADLIGHT_PIN, LOW);
+  }
+
+  // Check VEML7700 interrupt status
+  uint16_t irq = veml.interruptStatus();
+  if (irq & VEML7700_INTERRUPT_LOW) {
+    Serial.println("** Low threshold");
+  }
+  if (irq & VEML7700_INTERRUPT_HIGH) {
+    Serial.println("** High threshold");
+  }
+
+  // Delay for next loop iteration
+  delay(500);
+}

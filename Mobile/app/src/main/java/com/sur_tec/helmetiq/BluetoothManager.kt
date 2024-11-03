@@ -1,131 +1,99 @@
+// BluetoothManager.kt
+
 package com.sur_tec.helmetiq
 
-import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.util.Log
-import android.widget.Toast
-import androidx.core.app.ActivityCompat
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.MultiplePermissionsState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.UUID
 
 class BluetoothManager(private val context: Context) {
 
-    private var bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
-    private var bluetoothDevice: BluetoothDevice? = null
     private var bluetoothSocket: BluetoothSocket? = null
-    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    private var inputStream: InputStream? = null
+    private var outputStream: OutputStream? = null
 
-    @OptIn(ExperimentalPermissionsApi::class)
-    fun initializeBluetooth(bluetoothPermissionState: MultiplePermissionsState, onConnected: () -> Unit) {
-        // Check for Bluetooth permissions first
-        if (!bluetoothPermissionState.allPermissionsGranted) {
-            bluetoothPermissionState.launchMultiplePermissionRequest()
-            return
-        }
-        if (bluetoothAdapter == null || !bluetoothAdapter!!.isEnabled) {
-            Log.d("Bluetooth", "Bluetooth is disabled, requesting enable")
-            // Request to enable Bluetooth
-            context.startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            })
+    private val deviceName = "HelmetIQ" // Replace with your device name
+    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Replace with your UUID
+
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
+
+    fun initializeBluetooth(onConnected: () -> Unit) {
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        if (bluetoothAdapter == null) {
+            Log.e("BluetoothManager", "Bluetooth is not supported on this device")
             return
         }
 
-        // If Bluetooth is enabled, continue to find the ESP32 device
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!bluetoothAdapter.isEnabled) {
+            // Handle Bluetooth not enabled scenario
+            Log.e("BluetoothManager", "Bluetooth is not enabled")
+            return
         }
-        bluetoothDevice = bluetoothAdapter?.bondedDevices?.find { it.name == "HelmetIQ" }
-        if (bluetoothDevice != null) {
-            Log.d("Bluetooth", "HelmetIQ device found: ${bluetoothDevice?.name}, ${bluetoothDevice?.address}")
-            connectToDevice(bluetoothDevice!!, onConnected)
+
+        val device = bluetoothAdapter.bondedDevices.find { it.name == deviceName }
+
+        if (device != null) {
+            connectToDevice(device, onConnected)
         } else {
-            Log.e("Bluetooth", "ESP32 device not found")
-            Toast.makeText(context, "HelmetIQ device not found", Toast.LENGTH_SHORT).show()
+            Log.e("BluetoothManager", "Device not found")
         }
     }
 
     private fun connectToDevice(device: BluetoothDevice, onConnected: () -> Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
+        coroutineScope.launch {
             try {
-                if (ActivityCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    Log.e("Bluetooth", "BLUETOOTH_CONNECT permission not granted")
-                    return@launch
-                }
-
                 bluetoothSocket = device.createRfcommSocketToServiceRecord(uuid)
-                bluetoothAdapter?.cancelDiscovery() // Cancel discovery before connecting
                 bluetoothSocket?.connect()
-                Log.d("Bluetooth", "Connected to ${device.name}")
-                withContext(Dispatchers.Main){
-                    Toast.makeText(context,"Connected to ${device.name}",Toast.LENGTH_SHORT).show()
+                inputStream = bluetoothSocket?.inputStream
+                outputStream = bluetoothSocket?.outputStream
+
+                withContext(Dispatchers.Main) {
                     onConnected()
                 }
-            }
-            catch (e: Exception)
-            {
-                withContext(Dispatchers.Main){
-                    Toast.makeText(context,"Connection failed: ${e.message}",Toast.LENGTH_SHORT).show()
-                    Log.e("Bluetooth", "Connection failed", e)
-                }
+            } catch (e: IOException) {
+                Log.e("BluetoothManager", "Connection failed", e)
             }
         }
     }
-
-
-    fun sendData(data: String)
-    {
-        bluetoothSocket?.let { socket ->
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val outputStream = socket.outputStream
-                    val dataToSend = data.toByteArray()
-                    outputStream.write(dataToSend)
-                    outputStream.flush()
-                    Log.d("Bluetooth", "Data sent: ${dataToSend.contentToString()}")
-                } catch (e: Exception) {
-                    Log.e("Bluetooth", "Failed to send data", e)
-                }
-            }
-        } ?: run {
-            Log.e("Bluetooth", "Bluetooth socket is null, cannot send data")
-        }
-    }
-
 
     fun listenForData(onDataReceived: (String) -> Unit) {
-        bluetoothSocket?.let { socket ->
-            CoroutineScope(Dispatchers.IO).launch {
-                val buffer = ByteArray(1024)
-                var bytes: Int
-                val inputStream = socket.inputStream
+        coroutineScope.launch {
+            val buffer = ByteArray(1024)
+            var bytes: Int
+
+            while (true) {
                 try {
-                    while (true) {
-                        bytes = inputStream.read(buffer)
-                        val receivedData = String(buffer, 0, bytes)
-                        Log.d("Bluetooth", "Data received: $receivedData")
-                        onDataReceived(receivedData)
+                    bytes = inputStream?.read(buffer) ?: break
+                    val readMessage = String(buffer, 0, bytes)
+                    withContext(Dispatchers.Main) {
+                        onDataReceived(readMessage)
                     }
-                } catch (e: Exception) {
-                    Log.e("Bluetooth", "Failed to receive data", e)
+                } catch (e: IOException) {
+                    Log.e("BluetoothManager", "Input stream was disconnected", e)
+                    break
                 }
+            }
+        }
+    }
+
+    fun sendData(data: String) {
+        coroutineScope.launch {
+            try {
+                outputStream?.write(data.toByteArray())
+            } catch (e: IOException) {
+                Log.e("BluetoothManager", "Error occurred when sending data", e)
             }
         }
     }
@@ -133,11 +101,12 @@ class BluetoothManager(private val context: Context) {
     fun disconnect() {
         try {
             bluetoothSocket?.close()
-            Toast.makeText(context,"Disconnected from device",Toast.LENGTH_SHORT).show()
-            Log.d("Bluetooth", "Disconnected from device")
-        } catch (e: Exception) {
-            Log.e("Bluetooth", "Failed to disconnect", e)
+            inputStream = null
+            outputStream = null
+            bluetoothSocket = null
+            coroutineScope.cancel()
+        } catch (e: IOException) {
+            Log.e("BluetoothManager", "Could not close the client socket", e)
         }
     }
 }
-

@@ -1,86 +1,64 @@
 // SmsHelper.kt
+
 package com.sur_tec.helmetiq
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.telephony.SmsManager
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Credentials
-import okhttp3.FormBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.IOException
 
-// SmsHelper.kt
 object SmsHelper {
-    suspend fun sendEmergencySms(context: Context, contacts: List<Contact>) {
+    suspend fun sendEmergencySms(context: Context, contacts: List<Contact>): Boolean {
         if (contacts.isEmpty()) {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "No contacts to send SMS to.", Toast.LENGTH_SHORT).show()
             }
-            return
+            return false
         }
 
-        val accountSid = "xxx"
-        val authToken = "xxx"
-        val fromNumber = "xxx"
+        // Check if SEND_SMS permission is granted
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "SMS permission not granted.", Toast.LENGTH_SHORT).show()
+            }
+            return false
+        }
 
+        val messageBody = "HelmetIQ: Emergency! The user may have been involved in a collision!"
 
-        val messageBody = "HelmetIQ Midterm Demo: Emergency! The user may have been involved in a collision!"
-        val client = OkHttpClient()
+        val smsManager = SmsManager.getDefault()
+        var success = true
 
         contacts.forEach { contact ->
             val toNumber = contact.phoneNumber
 
-            val url = "https://api.twilio.com/2010-04-01/Accounts/$accountSid/Messages.json"
-
-            val formBody = FormBody.Builder()
-                .add("To", toNumber)
-                .add("From", fromNumber)
-                .add("Body", messageBody)
-                .build()
-
-            val credential = Credentials.basic(accountSid, authToken)
-
-            val request = Request.Builder()
-                .url(url)
-                .post(formBody)
-                .header("Authorization", credential)
-                .build()
-
             try {
-                val response = withContext(Dispatchers.IO) {
-                    client.newCall(request).execute()
-                }
-                val responseBody = response.body?.string()
-                if (!response.isSuccessful) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Failed to send message to ${contact.name}: ${response.code} - $responseBody",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Message sent to ${contact.name}", Toast.LENGTH_SHORT).show()
-                    }
+                smsManager.sendTextMessage(toNumber, null, messageBody, null, null)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Message sent to ${contact.name}", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                success = false
                 withContext(Dispatchers.Main) {
                     val errorMessage = when (e) {
-                        is IOException -> "Network error: ${e.message}"
-                        is IllegalArgumentException -> "Invalid argument: ${e.message}"
-                        else -> "Unexpected error: ${e.javaClass.simpleName} - ${e.message}"
+                        is SecurityException -> "Permission denied: ${e.message}"
+                        else -> "Error sending SMS: ${e.message}"
                     }
                     Toast.makeText(
                         context,
                         "Error sending message to ${contact.name}: $errorMessage",
                         Toast.LENGTH_LONG
                     ).show()
-                    e.printStackTrace() // This will print the full stack trace to logcat
+                    e.printStackTrace()
                 }
             }
         }
+        return success
     }
 }

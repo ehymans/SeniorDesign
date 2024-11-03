@@ -1,7 +1,9 @@
 // File: Contacts.kt
 package com.sur_tec.helmetiq
 
+import android.Manifest
 import android.content.Context
+import android.view.Gravity
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,17 +59,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavHostController
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.PermissionStatus
+import com.google.accompanist.permissions.rememberPermissionState
 import com.sur_tec.helmetiq.ui.theme.Monnestraut
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.Credentials
-import okhttp3.FormBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.IOException
-import android.view.Gravity
-
 
 data class Contact(val name: String, val phoneNumber: String)
 
@@ -115,9 +111,7 @@ fun ContactDialog(
                 OutlinedTextField(
                     value = phoneDigits,
                     onValueChange = { newInput ->
-                        // Filter out non-digit characters and limit to 10 digits
                         val filteredText = newInput.text.filter { it.isDigit() }.take(10)
-                        // Update the phoneDigits state with the new filtered text and set cursor to the end
                         phoneDigits = TextFieldValue(
                             text = filteredText,
                             selection = TextRange(filteredText.length)
@@ -162,10 +156,13 @@ fun ContactDialog(
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    val smsPermissionState = rememberPermissionState(permission = Manifest.permission.SEND_SMS)
 
     var switchState by remember { mutableStateOf(false) }
     var showNewContactDialog by remember { mutableStateOf(false) }
@@ -173,7 +170,7 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
     var contacts by remember { mutableStateOf(listOf<Contact>()) }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
 
-    var toastMessage by remember { mutableStateOf<String?>(null) }  // to keep toast messages at bottom of screen !
+    var toastMessage by remember { mutableStateOf<String?>(null) }
 
     // Load contacts from SharedPreferences when composable is first launched
     LaunchedEffect(Unit) {
@@ -204,10 +201,23 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
                 showEditContactDialog = true
             }
         )
+
         // Add the "Test Emergency SMS" button
         Button(onClick = {
-            coroutineScope.launch {
-                //sendEmergencySms(context, contacts)
+            when (smsPermissionState.status) {
+                is PermissionStatus.Granted -> {
+                    coroutineScope.launch {
+                        val success = SmsHelper.sendEmergencySms(context, contacts)
+                        if (success) {
+                            Toast.makeText(context, "Test SMS sent.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Failed to send Test SMS.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                is PermissionStatus.Denied -> {
+                    smsPermissionState.launchPermissionRequest()
+                }
             }
         }) {
             Text("Test Emergency SMS")
@@ -223,10 +233,9 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
                 contacts = contacts + newContact
                 PrefsHelper.saveContacts(context, contacts)
                 showNewContactDialog = false
-                //Toast.makeText(context, "Contact added", Toast.LENGTH_SHORT).show()
                 toastMessage = "Contact Added!"
             },
-            onDelete = { } // Not used for new contacts
+            onDelete = { }
         )
     }
 
@@ -240,14 +249,12 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
                 }
                 PrefsHelper.saveContacts(context, contacts)
                 showEditContactDialog = false
-                //Toast.makeText(context, "Contact updated", Toast.LENGTH_SHORT).show()
                 toastMessage = "Contact Updated."
             },
             onDelete = {
                 contacts = contacts.filter { it != selectedContact }
                 PrefsHelper.saveContacts(context, contacts)
                 showEditContactDialog = false
-                //Toast.makeText(context, "Contact deleted", Toast.LENGTH_SHORT).show()
                 toastMessage = "Contact Deleted."
             }
         )
@@ -255,9 +262,7 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
 
     LaunchedEffect(toastMessage) {
         toastMessage?.let {
-            // Use your custom function to show the Toast at the bottom
             showBottomToast(context, it)
-            // Reset the toastMessage to avoid showing it again
             toastMessage = null
         }
     }

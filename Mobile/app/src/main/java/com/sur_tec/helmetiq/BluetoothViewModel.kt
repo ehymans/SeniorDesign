@@ -6,7 +6,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.MultiplePermissionsState
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,13 +20,9 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
 
-    // StateFlow for distance
-    //private val _distance = MutableStateFlow("0")
-    //val distance: StateFlow<String> = _distance
-
-    sealed class BluetoothEvent
-    {
+    sealed class BluetoothEvent {
         object CollisionDetected : BluetoothEvent()
+        object SmsPermissionDenied : BluetoothEvent()
     }
 
     private val _eventFlow = MutableSharedFlow<BluetoothEvent>()
@@ -38,24 +33,15 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         _isConnected.value = status
     }
 
-    /*
-    // Function to update the distance
-    fun updateDistance(newDistance: String) {
-        _distance.value = newDistance
-    }
-    */
-
-
     private var isBluetoothInitialized = false
 
     @OptIn(ExperimentalPermissionsApi::class)
     fun initializeBluetooth(
-        bluetoothPermissionState: MultiplePermissionsState,
         onConnected: () -> Unit
     ) {
-        if(isBluetoothInitialized) return
+        if (isBluetoothInitialized) return
         isBluetoothInitialized = true
-        bluetoothManager.initializeBluetooth(bluetoothPermissionState) {
+        bluetoothManager.initializeBluetooth {
             // On connected
             updateConnectionStatus(true)
             listenForData()
@@ -63,11 +49,10 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // updated for collision flag 10/18
+    // Updated for collision flag
     private fun listenForData() {
         bluetoothManager.listenForData { data ->
-            if(data.trim() == "69")
-            {
+            if (data.trim() == "69") {
                 viewModelScope.launch {
                     _eventFlow.emit(BluetoothEvent.CollisionDetected)
                 }
@@ -75,11 +60,12 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun sendEmergencySms() {
+    fun sendEmergencySms(onSmsSent: (Boolean) -> Unit) {
         viewModelScope.launch {
             val context = getApplication<Application>().applicationContext
             val contacts = PrefsHelper.loadContacts(context)
-            SmsHelper.sendEmergencySms(context, contacts)
+            val result = SmsHelper.sendEmergencySms(context, contacts)
+            onSmsSent(result)
         }
     }
 

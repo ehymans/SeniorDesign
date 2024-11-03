@@ -19,8 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -42,15 +43,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.rememberPermissionState
@@ -60,17 +61,8 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.sur_tec.helmetiq.navigation.Screens
-import com.sur_tec.helmetiq.ui.theme.customColors
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -80,11 +72,10 @@ fun Mainscreen(
     bluetoothViewModel: BluetoothViewModel
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val isConnected = bluetoothViewModel.isConnected.collectAsState()
-    //val distanceTravelled = bluetoothViewModel.distance.collectAsState().value
+    val isConnected by bluetoothViewModel.isConnected.collectAsState()
 
-    // Bluetooth permissions handling
+    // Permission states
+    val smsPermissionState = rememberPermissionState(permission = Manifest.permission.SEND_SMS)
     val bluetoothPermissionState = rememberMultiplePermissionsState(
         permissions = listOf(
             Manifest.permission.BLUETOOTH_CONNECT,
@@ -92,27 +83,43 @@ fun Mainscreen(
             Manifest.permission.BLUETOOTH_ADMIN
         )
     )
-
-    // Location permissions handling
     val locationPermissionState =
         rememberPermissionState(permission = Manifest.permission.ACCESS_FINE_LOCATION)
+
     val cameraPositionState = rememberCameraPositionState()
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
 
-    var locationPermissionGranted by remember { mutableStateOf(false) }
-
-    // Collision dialog state
     var showCollisionDialog by remember { mutableStateOf(false) }
     var timer by remember { mutableStateOf(30) }
-
-    // Headlights switch state
     var switchState by rememberSaveable { mutableStateOf(true) }
 
+    var smsRequested by remember { mutableStateOf(false) }
+
+    // Function to handle sending SMS
+    fun sendSms() {
+        when (smsPermissionState.status) {
+            is PermissionStatus.Granted -> {
+                bluetoothViewModel.sendEmergencySms { success ->
+                    if (success) {
+                        Toast.makeText(context, "Emergency SMS sent.", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to send Emergency SMS.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            is PermissionStatus.Denied -> {
+                smsRequested = true
+                smsPermissionState.launchPermissionRequest()
+            }
+        }
+    }
+
+    // Initialize Bluetooth
     LaunchedEffect(Unit) {
-        if (!bluetoothViewModel.isConnected.value) {  // to prevent constant reconnects
+        if (!isConnected) {  // to prevent constant reconnects
             if (bluetoothPermissionState.allPermissionsGranted) {
-                bluetoothViewModel.initializeBluetooth(bluetoothPermissionState) {
+                bluetoothViewModel.initializeBluetooth {
                     Log.d("Bluetooth", "Connected to device")
                 }
             } else {
@@ -120,7 +127,6 @@ fun Mainscreen(
             }
         }
     }
-
 
     // Observe Bluetooth events for collision detection
     LaunchedEffect(Unit) {
@@ -130,6 +136,8 @@ fun Mainscreen(
                     showCollisionDialog = true
                     timer = 10
                 }
+
+                else -> {}
             }
         }
     }
@@ -137,41 +145,55 @@ fun Mainscreen(
     // Timer for collision dialog
     LaunchedEffect(showCollisionDialog) {
         if (showCollisionDialog) {
+            timer = 10
             while (timer > 0) {
                 delay(1000L)
                 timer -= 1
             }
             if (showCollisionDialog) {
                 showCollisionDialog = false
-                bluetoothViewModel.sendEmergencySms()
+                sendSms()
             }
+        }
+    }
+
+    // Handle SMS permission result
+    LaunchedEffect(smsPermissionState.status) {
+        if (smsRequested) {
+            if (smsPermissionState.status is PermissionStatus.Granted) {
+                // Permission granted, proceed to send SMS
+                bluetoothViewModel.sendEmergencySms { success ->
+                    if (success) {
+                        Toast.makeText(context, "Emergency SMS sent.", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to send Emergency SMS.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else if (smsPermissionState.status is PermissionStatus.Denied) {
+                // Permission denied, show a message or take appropriate action
+                Toast.makeText(context, "SMS permission denied.", Toast.LENGTH_SHORT).show()
+            }
+            smsRequested = false
         }
     }
 
     // Location permission handling
-    LaunchedEffect(key1 = locationPermissionState.status.isGranted) {
-        if (!locationPermissionGranted) {
-            // Ask for location permission
-            locationPermissionState.launchPermissionRequest()
-        }
-        locationPermissionGranted = locationPermissionState.status.isGranted
-    }
-
-    if (locationPermissionGranted) {
-        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            location?.let {
-                userLocation = LatLng(it.latitude, it.longitude)
-                cameraPositionState.position = CameraPosition.fromLatLngZoom(userLocation!!, 15f)
-            } ?: run {
-                Toast.makeText(context, "Unable to get location", Toast.LENGTH_SHORT).show()
+    LaunchedEffect(locationPermissionState.status.isGranted) {
+        if (locationPermissionState.status.isGranted) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                location?.let {
+                    userLocation = LatLng(it.latitude, it.longitude)
+                    cameraPositionState.position = CameraPosition.fromLatLngZoom(userLocation!!, 15f)
+                } ?: run {
+                    Toast.makeText(context, "Unable to get location", Toast.LENGTH_SHORT).show()
+                }
             }
-        }
-    } else {
-        LaunchedEffect(key1 = Unit) {
+        } else {
             locationPermissionState.launchPermissionRequest()
         }
     }
 
+    // UI Components
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -201,7 +223,7 @@ fun Mainscreen(
                 Icon(
                     painter = painterResource(id = R.drawable.ic_bluetooth),
                     contentDescription = "Bluetooth",
-                    tint = if (isConnected.value) MaterialTheme.colorScheme.primary else Color.Gray,
+                    tint = if (isConnected) MaterialTheme.colorScheme.primary else Color.Gray,
                     modifier = Modifier
                         .size(40.dp)
                         .clickable(
@@ -209,12 +231,9 @@ fun Mainscreen(
                             interactionSource = remember { MutableInteractionSource() },
                             onClick = {
                                 if (bluetoothPermissionState.allPermissionsGranted) {
-                                    if (!isConnected.value) {
-                                        bluetoothViewModel.initializeBluetooth(
-                                            bluetoothPermissionState
-                                        ) {
+                                    if (!isConnected) {
+                                        bluetoothViewModel.initializeBluetooth {
                                             Log.d("Bluetooth", "Connected to device")
-                                            // Connection status is updated in ViewModel
                                         }
                                     } else {
                                         bluetoothViewModel.disconnectBluetooth()
@@ -233,7 +252,7 @@ fun Mainscreen(
             HeadLight(switchState) {
                 switchState = it
                 if (bluetoothPermissionState.allPermissionsGranted) {
-                    if (isConnected.value) {
+                    if (isConnected) {
                         // Send appropriate message based on switchState
                         if (switchState) {
                             bluetoothViewModel.bluetoothManager.sendData("1")
@@ -268,9 +287,7 @@ fun Mainscreen(
                     GoogleMap(
                         modifier = Modifier.fillMaxSize(),
                         cameraPositionState = cameraPositionState,
-                        onMapLoaded = {
-                            // Map loaded
-                        }
+                        onMapLoaded = { /* Map loaded */ }
                     )
                 } else {
                     Text(
@@ -332,13 +349,11 @@ fun Mainscreen(
             timer = timer,
             onConfirm = {
                 showCollisionDialog = false
-                // Additional logic if needed
                 Toast.makeText(context, "Stay safe!", Toast.LENGTH_SHORT).show()
             },
             onDismiss = {
                 showCollisionDialog = false
-                // Additional logic if needed
-                bluetoothViewModel.sendEmergencySms()
+                sendSms()
             }
         )
     }
@@ -404,7 +419,7 @@ private fun HeaderTitle() {
     }
 }
 
-/*on main screen dialog pop-up when collision occurs (a drop for ex)*/
+/* Collision dialog when a possible collision is detected */
 @Composable
 fun CollisionDialog(
     timer: Int,

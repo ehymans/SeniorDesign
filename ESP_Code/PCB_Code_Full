@@ -21,13 +21,13 @@ bool isHeadlightOn = true; // Track the headlight status
 // Define pins for touch sensors and LEDs (blinkers)
 const int leftTouchPin = 27;   // Left touch sensor
 const int rightTouchPin = 4; // Right touch sensor
-const int leftLedPin = 19;    // Left blinker LED
-const int rightLedPin = 5;    // Right blinker LED
+const int leftLedPin = 33;    // Left blinker LED
+const int rightLedPin = 16;    // Right blinker LED
 
 // Define pins for the headlight and tail light
-const int headlightPin = 23;  // LED headlight
-const int tailLightPin = 18;  // LED tail light
-const int brakeLightPin = 18; // Brake light (same as tail light for simplicity)
+const int headlightPin = 32;  // LED headlight
+const int tailLightPin = 13;  // LED tail light
+const int brakeLightPin = 13; // Brake light (same as tail light for simplicity)
 
 // PWM settings for the tail light
 const int pwmFrequency = 5000; // PWM frequency

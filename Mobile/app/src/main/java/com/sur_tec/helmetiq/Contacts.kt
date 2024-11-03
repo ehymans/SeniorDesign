@@ -2,6 +2,7 @@
 package com.sur_tec.helmetiq
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.view.Gravity
 import android.widget.Toast
@@ -62,6 +63,8 @@ import androidx.navigation.NavHostController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import com.sur_tec.helmetiq.ui.theme.Monnestraut
 import kotlinx.coroutines.launch
 
@@ -163,6 +166,8 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
     val coroutineScope = rememberCoroutineScope()
 
     val smsPermissionState = rememberPermissionState(permission = Manifest.permission.SEND_SMS)
+    val locationPermissionState = rememberPermissionState(permission = Manifest.permission.ACCESS_FINE_LOCATION)
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     var switchState by remember { mutableStateOf(false) }
     var showNewContactDialog by remember { mutableStateOf(false) }
@@ -172,9 +177,12 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
 
     var toastMessage by remember { mutableStateOf<String?>(null) }
 
-    // Load contacts from SharedPreferences when composable is first launched
+    val userName = remember { mutableStateOf("") }
+
+    // Load contacts and user name
     LaunchedEffect(Unit) {
         contacts = PrefsHelper.loadContacts(context)
+        userName.value = PrefsHelper.loadUserName(context)
     }
 
     Column(
@@ -203,23 +211,41 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
         )
 
         // Add the "Test Emergency SMS" button
-        Button(onClick = {
-            when (smsPermissionState.status) {
-                is PermissionStatus.Granted -> {
-                    coroutineScope.launch {
-                        val success = SmsHelper.sendEmergencySms(context, contacts)
-                        if (success) {
-                            Toast.makeText(context, "Test SMS sent.", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "Failed to send Test SMS.", Toast.LENGTH_SHORT).show()
+        Button(
+            onClick = {
+                when (smsPermissionState.status) {
+                    is PermissionStatus.Granted -> {
+                        when (locationPermissionState.status) {
+                            is PermissionStatus.Granted -> {
+                                getLastKnownLocationString(context, fusedLocationClient) { locationString ->
+                                    coroutineScope.launch {
+                                        val nameToUse = if (userName.value.isNotBlank()) userName.value else "Test User"
+                                        val success = SmsHelper.sendEmergencySms(
+                                            context,
+                                            contacts,
+                                            nameToUse,
+                                            locationString
+                                        )
+                                        if (success) {
+                                            Toast.makeText(context, "Test SMS sent.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Failed to send Test SMS.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                            is PermissionStatus.Denied -> {
+                                locationPermissionState.launchPermissionRequest()
+                            }
                         }
                     }
+                    is PermissionStatus.Denied -> {
+                        smsPermissionState.launchPermissionRequest()
+                    }
                 }
-                is PermissionStatus.Denied -> {
-                    smsPermissionState.launchPermissionRequest()
-                }
-            }
-        }) {
+            },
+            modifier = Modifier.padding(16.dp)
+        ) {
             Text("Test Emergency SMS")
         }
     }
@@ -265,6 +291,22 @@ fun Contacts(navController: NavHostController, modifier: Modifier = Modifier) {
             showBottomToast(context, it)
             toastMessage = null
         }
+    }
+}
+
+@SuppressLint("MissingPermission")
+fun getLastKnownLocationString(
+    context: Context,
+    fusedLocationClient: FusedLocationProviderClient,
+    onLocationResult: (String) -> Unit
+) {
+    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+        val locationString = if (location != null) {
+            "https://maps.google.com/?q=${location.latitude},${location.longitude}"
+        } else {
+            "Location unavailable"
+        }
+        onLocationResult(locationString)
     }
 }
 

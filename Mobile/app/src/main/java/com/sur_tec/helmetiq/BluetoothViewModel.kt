@@ -60,11 +60,11 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun sendEmergencySms(onSmsSent: (Boolean) -> Unit) {
+    fun sendEmergencySms(userName: String, location: String, onSmsSent: (Boolean) -> Unit) {
         viewModelScope.launch {
             val context = getApplication<Application>().applicationContext
             val contacts = PrefsHelper.loadContacts(context)
-            val result = SmsHelper.sendEmergencySms(context, contacts)
+            val result = SmsHelper.sendEmergencySms(context, contacts, userName, location)
             onSmsSent(result)
         }
     }

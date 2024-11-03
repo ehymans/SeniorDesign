@@ -12,7 +12,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object SmsHelper {
-    suspend fun sendEmergencySms(context: Context, contacts: List<Contact>): Boolean {
+    suspend fun sendEmergencySms(
+        context: Context,
+        contacts: List<Contact>,
+        userName: String,
+        location: String
+    ): Boolean {
         if (contacts.isEmpty()) {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "No contacts to send SMS to.", Toast.LENGTH_SHORT).show()
@@ -30,7 +35,7 @@ object SmsHelper {
             return false
         }
 
-        val messageBody = "HelmetIQ: Emergency! The user may have been involved in a collision!"
+        val messageBody = "HelmetIQ: Emergency! Your friend $userName may have been involved in a collision! Their current location is: $location"
 
         val smsManager = SmsManager.getDefault()
         var success = true

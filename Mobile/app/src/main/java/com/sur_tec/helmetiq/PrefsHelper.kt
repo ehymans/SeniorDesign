@@ -8,9 +8,19 @@ import com.google.gson.reflect.TypeToken
 object PrefsHelper {
     private const val PREFS_NAME = "helmet_iq_prefs"
     private const val CONTACTS_KEY = "emergency_contacts"
-
+    private const val USER_NAME_KEY = "user_name"
     private fun getPrefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun saveUserName(context: Context, userName: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(USER_NAME_KEY, userName).apply()
+    }
+
+    fun loadUserName(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(USER_NAME_KEY, "") ?: ""
+    }
 
     fun saveContacts(context: Context, contacts: List<Contact>) {
         val prefs = getPrefs(context)

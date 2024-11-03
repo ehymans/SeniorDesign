@@ -1,6 +1,10 @@
+// Mainscreen.kt
+
 package com.sur_tec.helmetiq
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -17,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,9 +29,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavHostController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
@@ -88,36 +97,52 @@ fun Mainscreen(
 
     val cameraPositionState = rememberCameraPositionState()
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-    var userLocation by remember { mutableStateOf<LatLng?>(null) }
 
+    var userLocation by remember { mutableStateOf<LatLng?>(null) }
     var showCollisionDialog by remember { mutableStateOf(false) }
     var timer by remember { mutableStateOf(30) }
     var switchState by rememberSaveable { mutableStateOf(true) }
 
-    var smsRequested by remember { mutableStateOf(false) }
+    var userName by remember { mutableStateOf("") }
+    var showUserNameDialog by remember { mutableStateOf(false) }
 
-    // Function to handle sending SMS
-    fun sendSms() {
-        when (smsPermissionState.status) {
-            is PermissionStatus.Granted -> {
-                bluetoothViewModel.sendEmergencySms { success ->
-                    if (success) {
-                        Toast.makeText(context, "Emergency SMS sent.", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Failed to send Emergency SMS.", Toast.LENGTH_SHORT).show()
-                    }
+    var pendingSendEmergencySms by remember { mutableStateOf(false) }
+
+    // Load user name
+    LaunchedEffect(Unit) {
+        userName = PrefsHelper.loadUserName(context)
+        if (userName.isBlank()) {
+            showUserNameDialog = true
+        }
+    }
+
+    // Function to initiate sending emergency SMS
+    fun onSendEmergencySms() {
+        pendingSendEmergencySms = true
+    }
+
+    // Handle sending SMS and permissions
+    LaunchedEffect(pendingSendEmergencySms, smsPermissionState.status, locationPermissionState.status) {
+        if (pendingSendEmergencySms) {
+            if (smsPermissionState.status is PermissionStatus.Granted &&
+                locationPermissionState.status is PermissionStatus.Granted
+            ) {
+                sendEmergencySms(context, bluetoothViewModel, userName, fusedLocationClient)
+                pendingSendEmergencySms = false
+            } else {
+                if (smsPermissionState.status is PermissionStatus.Denied) {
+                    smsPermissionState.launchPermissionRequest()
                 }
-            }
-            is PermissionStatus.Denied -> {
-                smsRequested = true
-                smsPermissionState.launchPermissionRequest()
+                if (locationPermissionState.status is PermissionStatus.Denied) {
+                    locationPermissionState.launchPermissionRequest()
+                }
             }
         }
     }
 
     // Initialize Bluetooth
     LaunchedEffect(Unit) {
-        if (!isConnected) {  // to prevent constant reconnects
+        if (!isConnected) {
             if (bluetoothPermissionState.allPermissionsGranted) {
                 bluetoothViewModel.initializeBluetooth {
                     Log.d("Bluetooth", "Connected to device")
@@ -136,8 +161,7 @@ fun Mainscreen(
                     showCollisionDialog = true
                     timer = 10
                 }
-
-                else -> {}
+                else -> { /* Handle other events if necessary */ }
             }
         }
     }
@@ -152,35 +176,15 @@ fun Mainscreen(
             }
             if (showCollisionDialog) {
                 showCollisionDialog = false
-                sendSms()
+                onSendEmergencySms()
             }
-        }
-    }
-
-    // Handle SMS permission result
-    LaunchedEffect(smsPermissionState.status) {
-        if (smsRequested) {
-            if (smsPermissionState.status is PermissionStatus.Granted) {
-                // Permission granted, proceed to send SMS
-                bluetoothViewModel.sendEmergencySms { success ->
-                    if (success) {
-                        Toast.makeText(context, "Emergency SMS sent.", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Failed to send Emergency SMS.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } else if (smsPermissionState.status is PermissionStatus.Denied) {
-                // Permission denied, show a message or take appropriate action
-                Toast.makeText(context, "SMS permission denied.", Toast.LENGTH_SHORT).show()
-            }
-            smsRequested = false
         }
     }
 
     // Location permission handling
     LaunchedEffect(locationPermissionState.status.isGranted) {
         if (locationPermissionState.status.isGranted) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            getLastKnownLocation(context, fusedLocationClient) { location ->
                 location?.let {
                     userLocation = LatLng(it.latitude, it.longitude)
                     cameraPositionState.position = CameraPosition.fromLatLngZoom(userLocation!!, 15f)
@@ -201,7 +205,7 @@ fun Mainscreen(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        HeaderTitle()
+        HeaderTitle(userName)
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
@@ -353,9 +357,111 @@ fun Mainscreen(
             },
             onDismiss = {
                 showCollisionDialog = false
-                sendSms()
+                onSendEmergencySms()
             }
         )
+    }
+
+    // User Name Dialog
+    if (showUserNameDialog) {
+        UserNameDialog(
+            onSave = { name ->
+                userName = name
+                PrefsHelper.saveUserName(context, name)
+                showUserNameDialog = false
+            },
+            onDismiss = {
+                userName = "User"
+                PrefsHelper.saveUserName(context, userName)
+                showUserNameDialog = false
+            }
+        )
+    }
+}
+
+@SuppressLint("MissingPermission")
+fun sendEmergencySms(
+    context: Context,
+    bluetoothViewModel: BluetoothViewModel,
+    userName: String,
+    fusedLocationClient: com.google.android.gms.location.FusedLocationProviderClient
+) {
+    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+        val locationString = if (location != null) {
+            "https://maps.google.com/?q=${location.latitude},${location.longitude}"
+        } else {
+            "Location unavailable"
+        }
+        bluetoothViewModel.sendEmergencySms(userName, locationString) { success ->
+            if (success) {
+                Toast.makeText(context, "Emergency SMS sent.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to send Emergency SMS.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
+
+@SuppressLint("MissingPermission")
+fun getLastKnownLocation(
+    context: Context,
+    fusedLocationClient: com.google.android.gms.location.FusedLocationProviderClient,
+    onLocationResult: (android.location.Location?) -> Unit
+) {
+    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+        onLocationResult(location)
+    }
+}
+
+@Composable
+fun UserNameDialog(
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = "Enter Your Name",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { newValue -> name = newValue },
+                    label = { Text("Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (name.isNotBlank()) {
+                                onSave(name)
+                            }
+                        }
+                    ) {
+                        Text("Save")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -400,15 +506,16 @@ private fun HelmetImage() {
     )
 }
 
+// Updated HeaderTitle to accept userName
 @Composable
-private fun HeaderTitle() {
+private fun HeaderTitle(userName: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth(),
         horizontalArrangement = Arrangement.Start
     ) {
         Text(
-            text = "HelmetIQ",
+            text = "HelmetIQ - $userName",
             fontSize = 30.sp,
             fontStyle = FontStyle.Italic,
             fontWeight = FontWeight.Black,

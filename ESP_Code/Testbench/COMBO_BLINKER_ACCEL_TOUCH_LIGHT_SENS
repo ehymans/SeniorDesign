@@ -1,0 +1,156 @@
+#include "ICM42670P.h"
+#include "Adafruit_VEML7700.h"
+
+#define LEFT_TOUCH_PIN 27     // GPIO for the left touch sensor
+#define RIGHT_TOUCH_PIN 4     // GPIO for the right touch sensor
+#define HEADLIGHT_PIN 32
+#define TAILLIGHT_PIN 13
+#define LEFT_BLINKER 33
+#define RIGHT_BLINKER 16
+
+bool rightFlash = false;
+bool leftFlash = false;
+
+volatile int leftTouchCount = 0;       // Counter for left touch sensor
+volatile int rightTouchCount = 0;      // Counter for right touch sensor
+unsigned long lastLeftTouchTime = 0;   // Last activation time for debounce
+unsigned long lastRightTouchTime = 0;  // Last activation time for debounce
+const unsigned long debounceDelay = 800;  // Debounce delay in milliseconds
+
+// Instantiate an ICM42670 with LSB address set to 0
+ICM42670 IMU(Wire, 0);
+Adafruit_VEML7700 veml = Adafruit_VEML7700();
+
+void IRAM_ATTR leftTouchISR();
+void IRAM_ATTR rightTouchISR();
+
+void setup() {
+  // Initialize Serial for debugging
+  Serial.begin(115200);
+  while (!Serial) { delay(10); }
+
+  // Initialize ICM42670
+  int ret = IMU.begin();
+  if (ret != 0) {
+    Serial.print("ICM42670 initialization failed: ");
+    Serial.println(ret);
+    while (1);
+  }
+  // Configure IMU
+  IMU.startAccel(100, 16);  // Accel ODR = 100 Hz, Full Scale Range = 16G
+  IMU.startGyro(100, 2000); // Gyro ODR = 100 Hz, Full Scale Range = 2000 dps
+  delay(100); // Allow IMU to start
+
+  // Initialize VEML7700
+  Serial.println("Adafruit VEML7700 Test");
+  if (!veml.begin()) {
+    Serial.println("VEML7700 sensor not found");
+    while (1);
+  }
+  Serial.println("VEML7700 sensor found");
+
+  // Print VEML7700 gain and integration time
+  Serial.print(F("Gain: "));
+  switch (veml.getGain()) {
+    case VEML7700_GAIN_1: Serial.println("1"); break;
+    case VEML7700_GAIN_2: Serial.println("2"); break;
+    case VEML7700_GAIN_1_4: Serial.println("1/4"); break;
+    case VEML7700_GAIN_1_8: Serial.println("1/8"); break;
+  }
+
+  Serial.print(F("Integration Time (ms): "));
+  switch (veml.getIntegrationTime()) {
+    case VEML7700_IT_25MS: Serial.println("25"); break;
+    case VEML7700_IT_50MS: Serial.println("50"); break;
+    case VEML7700_IT_100MS: Serial.println("100"); break;
+    case VEML7700_IT_200MS: Serial.println("200"); break;
+    case VEML7700_IT_400MS: Serial.println("400"); break;
+    case VEML7700_IT_800MS: Serial.println("800"); break;
+  }
+
+
+  // Initialize the LED pins for the headlight and tail light as output
+  pinMode(HEADLIGHT_PIN, OUTPUT);
+  pinMode(TAILLIGHT_PIN, OUTPUT);
+  pinMode(RIGHT_BLINKER,OUTPUT);
+  pinMode(LEFT_BLINKER,OUTPUT);
+  pinMode(LEFT_TOUCH_PIN,INPUT_PULLUP);
+  pinMode(RIGHT_TOUCH_PIN,INPUT_PULLUP);
+  digitalWrite(HEADLIGHT_PIN, LOW); // Ensure the headlight is off initially
+  digitalWrite(TAILLIGHT_PIN, LOW);
+  digitalWrite(RIGHT_BLINKER,LOW);
+  digitalWrite(LEFT_BLINKER,LOW);
+
+  // Attach interrupts to the touch sensors
+  attachInterrupt(digitalPinToInterrupt(LEFT_TOUCH_PIN), leftTouchISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_TOUCH_PIN), rightTouchISR, FALLING);
+
+  Serial.println("Touch sensor and IMU test initialized. Waiting for touch inputs and sensor data...");
+}
+
+void loop() {
+  // Print the counts for both sensors every second
+  Serial.print("Left Touch Count: ");
+  Serial.println(leftTouchCount);
+
+  if(rightFlash) digitalWrite(RIGHT_BLINKER, HIGH);
+  else digitalWrite(RIGHT_BLINKER, LOW);
+
+  if(leftFlash) digitalWrite(LEFT_BLINKER, HIGH);
+  else digitalWrite(LEFT_BLINKER, LOW);
+
+
+  Serial.print("Right Touch Count: ");
+  Serial.println(rightTouchCount);
+
+  // Read data from ICM42670
+  inv_imu_sensor_event_t imu_event;
+  IMU.getDataFromRegisters(imu_event);
+
+  // Print IMU data
+  Serial.print("AccelX:");
+  Serial.println(imu_event.accel[0]);
+  Serial.print("AccelY:");
+  Serial.println(imu_event.accel[1]);
+  Serial.print("AccelZ:");
+  Serial.println(imu_event.accel[2]);
+
+
+  // Print VEML7700 data
+  float lux = veml.readLux();
+  Serial.print("lux: ");
+  Serial.println(lux);
+
+  // Turn on the headlight and tail light if lux is below 60
+  if (lux < 60) {
+    digitalWrite(HEADLIGHT_PIN, HIGH);
+    digitalWrite(TAILLIGHT_PIN, HIGH);
+  } else {
+    digitalWrite(HEADLIGHT_PIN, LOW);
+    digitalWrite(TAILLIGHT_PIN, LOW);
+  }
+
+  delay(1000);  // Update output every second
+}
+
+// Interrupt Service Routine (ISR) for the left touch sensor
+void IRAM_ATTR leftTouchISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastLeftTouchTime > debounceDelay) {  // Debounce check
+    leftTouchCount++;  // Increment the left touch counter
+    leftFlash = !leftFlash;
+    lastLeftTouchTime = currentTime;
+  
+  }
+}
+
+// Interrupt Service Routine (ISR) for the right touch sensor
+void IRAM_ATTR rightTouchISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastRightTouchTime > debounceDelay) {  // Debounce check
+    rightTouchCount++;  // Increment the right touch counter
+    rightFlash = !rightFlash;
+    lastRightTouchTime = currentTime;
+
+  }
+}

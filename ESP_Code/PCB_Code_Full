@@ -263,8 +263,8 @@ void handleHeadlightAndTailLight(void *param) {
 }
 
 // Threshold for collision detection (adjust as needed)
-const float collisionThreshold = 14.0; // Adjust thresholds in all directions
-const float decelThreshold = 6.0; // Adjust when testing
+const float collisionThreshold = 2600.0; // Adjust thresholds in all directions
+const float decelThreshold = 900.0; // Adjust when testing
 
 // Task for collision detection
 void handleCollisionDetection(void *param) {

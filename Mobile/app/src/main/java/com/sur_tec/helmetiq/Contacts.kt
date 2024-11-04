@@ -35,8 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -353,7 +351,7 @@ fun NewContactAndSmsToggle(
                 }
             )
         }
-
+        /*
         // Potential Collision SMS Toggle
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -385,114 +383,114 @@ fun NewContactAndSmsToggle(
                 ),
                 modifier = Modifier.padding(end = 12.dp, start = 12.dp)
             )
-        }
+            }*/
     }
 }
 
 @Composable
 fun ContactList(contacts: List<Contact>, onContactClick: (Contact) -> Unit) {
-    Column {
-        if (contacts.isEmpty()) {
-            Text(
-                text = "No Emergency Contacts Added.",
-                fontSize = 16.sp,
-                color = Color.Gray,
-                modifier = Modifier.padding(16.dp)
-            )
-        } else {
-            contacts.forEach { contact ->
-                ContactItem(contact, onContactClick)
-            }
-        }
+Column {
+if (contacts.isEmpty()) {
+    Text(
+        text = "No Emergency Contacts Added.",
+        fontSize = 16.sp,
+        color = Color.Gray,
+        modifier = Modifier.padding(16.dp)
+    )
+} else {
+    contacts.forEach { contact ->
+        ContactItem(contact, onContactClick)
     }
+}
+}
 }
 
 @Composable
 fun ContactItem(contact: Contact, onClick: (Contact) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .padding(vertical = 12.dp, horizontal = 12.dp)
-            .clickable { onClick(contact) }
-    ) {
-        Icon(
-            imageVector = Icons.Default.Person,
-            contentDescription = "Contact Icon",
-            tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = contact.name,
-                fontSize = 18.sp,
-                fontFamily = Monnestraut,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onPrimary
-            )
-            Text(
-                text = contact.phoneNumber,
-                fontSize = 14.sp,
-                fontFamily = Monnestraut,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-            )
-        }
-        Icon(
-            imageVector = Icons.Default.ArrowForward,
-            contentDescription = "Go to Contact",
-            tint = MaterialTheme.colorScheme.onPrimary
-        )
-    }
+Row(
+verticalAlignment = Alignment.CenterVertically,
+modifier = Modifier
+    .padding(horizontal = 12.dp, vertical = 8.dp)
+    .fillMaxWidth()
+    .clip(RoundedCornerShape(8.dp))
+    .background(MaterialTheme.colorScheme.primary)
+    .padding(vertical = 12.dp, horizontal = 12.dp)
+    .clickable { onClick(contact) }
+) {
+Icon(
+    imageVector = Icons.Default.Person,
+    contentDescription = "Contact Icon",
+    tint = MaterialTheme.colorScheme.onPrimary,
+    modifier = Modifier.size(24.dp)
+)
+Spacer(modifier = Modifier.width(16.dp))
+Column(modifier = Modifier.weight(1f)) {
+    Text(
+        text = contact.name,
+        fontSize = 18.sp,
+        fontFamily = Monnestraut,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onPrimary
+    )
+    Text(
+        text = contact.phoneNumber,
+        fontSize = 14.sp,
+        fontFamily = Monnestraut,
+        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+    )
+}
+Icon(
+    imageVector = Icons.Default.ArrowForward,
+    contentDescription = "Go to Contact",
+    tint = MaterialTheme.colorScheme.onPrimary
+)
+}
 }
 
 @Composable
 fun CustomFloatingActionButton(
-    onClick: () -> Unit,
-    backgroundColor: Color = MaterialTheme.colorScheme.primary,
-    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
-    icon: @Composable () -> Unit,
-    shape: CornerBasedShape = MaterialTheme.shapes.small
+onClick: () -> Unit,
+backgroundColor: Color = MaterialTheme.colorScheme.primary,
+contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+icon: @Composable () -> Unit,
+shape: CornerBasedShape = MaterialTheme.shapes.small
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .padding(end = 12.dp)
-            .size(48.dp)
-            .clip(shape)
-            .background(backgroundColor)
-            .clickable {
-                onClick()
-            }
-    ) {
-        icon()
+Box(
+contentAlignment = Alignment.Center,
+modifier = Modifier
+    .padding(end = 12.dp)
+    .size(48.dp)
+    .clip(shape)
+    .background(backgroundColor)
+    .clickable {
+        onClick()
     }
+) {
+icon()
+}
 }
 
 @Composable
 fun Header() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-    ) {
-        Text(
-            text = "Emergency Contacts",
-            fontSize = 24.sp,
-            fontFamily = Monnestraut,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.ExtraBold,
-            fontStyle = FontStyle.Italic,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp)
-        )
-    }
+Row(
+modifier = Modifier
+    .fillMaxWidth()
+) {
+Text(
+    text = "Emergency Contacts",
+    fontSize = 24.sp,
+    fontFamily = Monnestraut,
+    color = MaterialTheme.colorScheme.primary,
+    fontWeight = FontWeight.ExtraBold,
+    fontStyle = FontStyle.Italic,
+    modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp)
+)
+}
 }
 
 fun showBottomToast(context: Context, message: String, duration: Int = Toast.LENGTH_SHORT) {
-    Toast.makeText(context, message, duration).apply {
-        setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 100)
-        show()
-    }
+Toast.makeText(context, message, duration).apply {
+setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 100)
+show()
+}
 }

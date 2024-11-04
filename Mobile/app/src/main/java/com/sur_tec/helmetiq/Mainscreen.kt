@@ -116,11 +116,44 @@ fun Mainscreen(
         }
     }
 
+    LaunchedEffect(Unit)
+    {
+        // Request Bluetooth permissions
+        if (!bluetoothPermissionState.allPermissionsGranted)
+        {
+            bluetoothPermissionState.launchMultiplePermissionRequest()
+        }
+
+        // Request Location permission
+        if (locationPermissionState.status is PermissionStatus.Denied)
+        {
+            locationPermissionState.launchPermissionRequest()
+        }
+
+        // Request SMS permission
+        if (smsPermissionState.status is PermissionStatus.Denied)
+        {
+            smsPermissionState.launchPermissionRequest()
+        }
+
+        // Initialize Bluetooth if permissions are granted
+        if (bluetoothPermissionState.allPermissionsGranted)
+        {
+            if (!isConnected)
+            {
+                bluetoothViewModel.initializeBluetooth {
+                    Log.d("Bluetooth", "Connected to device")
+                }
+            }
+        }
+    }
+
     // Function to initiate sending emergency SMS
     fun onSendEmergencySms() {
         pendingSendEmergencySms = true
     }
-
+    
+    /*
     // Handle sending SMS and permissions
     LaunchedEffect(pendingSendEmergencySms, smsPermissionState.status, locationPermissionState.status) {
         if (pendingSendEmergencySms) {
@@ -138,7 +171,7 @@ fun Mainscreen(
                 }
             }
         }
-    }
+    }*/
 
     // Initialize Bluetooth
     LaunchedEffect(Unit) {

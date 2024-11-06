@@ -340,6 +340,14 @@ void handleCollisionDetection(void *param) {
     accelY = currentAccelY;
     accelZ = currentAccelZ;
 
+     // Print the current acceleration values and the deltas
+    Serial.print("Accel X: "); Serial.print(currentAccelX);
+    Serial.print(", Delta X: "); Serial.println(deltaX);
+    Serial.print("Accel Y: "); Serial.print(currentAccelY);
+    Serial.print(", Delta Y: "); Serial.println(deltaY);
+    Serial.print("Accel Z: "); Serial.print(currentAccelZ);
+    Serial.print(", Delta Z: "); Serial.println(deltaZ);
+
     // Check if any delta exceeds the collision threshold
     if (deltaX > collisionThreshold || deltaY > collisionThreshold || deltaZ > collisionThreshold) {
       Serial.println("Collision detected!");

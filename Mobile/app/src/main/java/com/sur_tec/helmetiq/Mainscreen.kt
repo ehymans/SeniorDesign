@@ -64,14 +64,18 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.rememberPermissionState
+import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.sur_tec.helmetiq.navigation.Screens
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -108,8 +112,12 @@ fun Mainscreen(
 
     var pendingSendEmergencySms by remember { mutableStateOf(false) }
 
-    // Load user name
+    var contacts by remember { mutableStateOf(listOf<Contact>()) }
+
     LaunchedEffect(Unit) {
+        // Load contacts
+        contacts = PrefsHelper.loadContacts(context)
+        // Load user name
         userName = PrefsHelper.loadUserName(context)
         if (userName.isBlank()) {
             showUserNameDialog = true
@@ -152,15 +160,14 @@ fun Mainscreen(
     fun onSendEmergencySms() {
         pendingSendEmergencySms = true
     }
-    
-    /*
-    // Handle sending SMS and permissions
+
+// Handle sending SMS and permissions
     LaunchedEffect(pendingSendEmergencySms, smsPermissionState.status, locationPermissionState.status) {
         if (pendingSendEmergencySms) {
-            if (smsPermissionState.status is PermissionStatus.Granted &&
-                locationPermissionState.status is PermissionStatus.Granted
+            if (smsPermissionState.status.isGranted &&
+                locationPermissionState.status.isGranted
             ) {
-                sendEmergencySms(context, bluetoothViewModel, userName, fusedLocationClient)
+                sendEmergencySms(context, contacts, userName, fusedLocationClient)
                 pendingSendEmergencySms = false
             } else {
                 if (smsPermissionState.status is PermissionStatus.Denied) {
@@ -171,7 +178,8 @@ fun Mainscreen(
                 }
             }
         }
-    }*/
+    }
+
 
     // Initialize Bluetooth
     LaunchedEffect(Unit) {
@@ -269,14 +277,29 @@ fun Mainscreen(
                             onClick = {
                                 if (bluetoothPermissionState.allPermissionsGranted) {
                                     if (!isConnected) {
+                                        Toast.makeText(
+                                            context,
+                                            "Searching for HelmetIQ...",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                         bluetoothViewModel.initializeBluetooth {
                                             Log.d("Bluetooth", "Connected to device")
                                         }
                                     } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Disconnecting from HelmetIQ...",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                         bluetoothViewModel.disconnectBluetooth()
                                         Log.d("Bluetooth", "Disconnected")
                                     }
                                 } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Bluetooth permissions required",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                     bluetoothPermissionState.launchMultiplePermissionRequest()
                                 }
                             }
@@ -413,24 +436,36 @@ fun Mainscreen(
 }
 
 @SuppressLint("MissingPermission")
-fun sendEmergencySms(
+suspend fun sendEmergencySms(
     context: Context,
-    bluetoothViewModel: BluetoothViewModel,
+    contacts: List<Contact>,
     userName: String,
-    fusedLocationClient: com.google.android.gms.location.FusedLocationProviderClient
+    fusedLocationClient: FusedLocationProviderClient
 ) {
-    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-        val locationString = if (location != null) {
-            "https://maps.google.com/?q=${location.latitude},${location.longitude}"
+    val location = try {
+        fusedLocationClient.lastLocation.await()
+    } catch (e: Exception) {
+        null
+    }
+
+    val locationString = if (location != null) {
+        "https://maps.google.com/?q=${location.latitude},${location.longitude}"
+    } else {
+        "Location unavailable"
+    }
+
+    val success = SmsHelper.sendEmergencySms(
+        context,
+        contacts,
+        userName,
+        locationString
+    )
+
+    withContext(Dispatchers.Main) {
+        if (success) {
+            Toast.makeText(context, "Emergency SMS sent.", Toast.LENGTH_SHORT).show()
         } else {
-            "Location unavailable"
-        }
-        bluetoothViewModel.sendEmergencySms(userName, locationString) { success ->
-            if (success) {
-                Toast.makeText(context, "Emergency SMS sent.", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context, "Failed to send Emergency SMS.", Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(context, "Failed to send Emergency SMS.", Toast.LENGTH_SHORT).show()
         }
     }
 }

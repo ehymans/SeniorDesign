@@ -39,8 +39,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     fun initializeBluetooth(
         onConnected: () -> Unit
     ) {
-        if (isBluetoothInitialized) return
-        isBluetoothInitialized = true
+        // Remove the initialization check since we want to allow reconnection
         bluetoothManager.initializeBluetooth {
             // On connected
             updateConnectionStatus(true)
@@ -72,5 +71,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     fun disconnectBluetooth() {
         bluetoothManager.disconnect()
         updateConnectionStatus(false)
+        isBluetoothInitialized = false
     }
 }

@@ -87,7 +87,10 @@ dependencies {
 
     implementation ("com.twilio.sdk:twilio:8.22.1")     // NOTE: newer version is available but app somehow crashes. Not with 8.22.1 though.
     implementation ("com.squareup.okhttp3:okhttp:4.9.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.0-alpha05")
+
 
     //implementation ("androidx.datastore:datastore-preferences:1.1.1")
     implementation ("com.google.code.gson:gson:2.10.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.6.0")
 }

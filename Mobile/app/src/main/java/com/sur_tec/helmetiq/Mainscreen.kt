@@ -76,6 +76,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import com.google.maps.android.compose.MapProperties
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -374,15 +375,15 @@ fun Mainscreen(
                     .height(180.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .shadow(4.dp, RoundedCornerShape(8.dp))
-                    .clickable {
-                        navController.navigate(Screens.MAPSCREEN.name)
-                    },
             ) {
                 if (locationPermissionState.status.isGranted) {
                     GoogleMap(
                         modifier = Modifier.fillMaxSize(),
                         cameraPositionState = cameraPositionState,
-                        onMapLoaded = { /* Map loaded */ }
+                        onMapLoaded = { /* Map loaded */ },
+                        properties = MapProperties(
+                            isMyLocationEnabled = locationPermissionState.status.isGranted
+                        )
                     )
                 } else {
                     Text(

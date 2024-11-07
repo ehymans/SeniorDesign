@@ -26,7 +26,6 @@ import androidx.navigation.compose.rememberNavController
 import com.sur_tec.helmetiq.BluetoothViewModel
 import com.sur_tec.helmetiq.Contacts
 import com.sur_tec.helmetiq.Mainscreen
-import com.sur_tec.helmetiq.map.MapScreen
 import com.sur_tec.helmetiq.navigation.BottomNavItem
 import com.sur_tec.helmetiq.navigation.Screens
 
@@ -43,7 +42,6 @@ fun HelmetIQNavigation(bluetoothViewModel: BluetoothViewModel) {
         bottomBarState.value = when (navBackStackEntry?.destination?.route) {
             Screens.MAINSCREEN.name,
             Screens.CONTACTSSCREEN.name -> true
-            Screens.MAPSCREEN.name -> false
             else -> true
         }
     }
@@ -61,10 +59,6 @@ fun HelmetIQNavigation(bluetoothViewModel: BluetoothViewModel) {
             }
             composable(Screens.CONTACTSSCREEN.name) {
                 Contacts(navController = navController, modifier = Modifier.padding(padding))
-            }
-            composable(Screens.MAPSCREEN.name) {
-                MapScreen(navController = navController) // Correctly calling the MapScreen composable
-
             }
         }
     }

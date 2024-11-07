@@ -16,13 +16,13 @@ BluetoothSerial SerialBT;
 SFE_HMD_DRV2605L HMD1;  // Haptic motor 1
 SFE_HMD_DRV2605L HMD2;  // Haptic motor 2
 
-bool isHeadlightOn = true;  // Track the headlight status
+volatile bool isHeadlightOn = true;  // Track the headlight status
 
 // Define pins for touch sensors and LEDs (blinkers)
 const int leftTouchPin = 27;   // Left touch sensor
 const int rightTouchPin = 4;   // Right touch sensor
 const int leftLedPin = 33;     // Left blinker LED
-const int rightLedPin = 16;    // Right blinker LED
+const int rightLedPin = 17;    // Right blinker LED
 
 // Define pins for the headlight and tail light
 const int headlightPin = 32;   // LED headlight
@@ -340,14 +340,14 @@ void handleCollisionDetection(void *param) {
     accelY = currentAccelY;
     accelZ = currentAccelZ;
 
-     // Print the current acceleration values and the deltas
+   /*  // Print the current acceleration values and the deltas
     Serial.print("Accel X: "); Serial.print(currentAccelX);
     Serial.print(", Delta X: "); Serial.println(deltaX);
     Serial.print("Accel Y: "); Serial.print(currentAccelY);
     Serial.print(", Delta Y: "); Serial.println(deltaY);
     Serial.print("Accel Z: "); Serial.print(currentAccelZ);
     Serial.print(", Delta Z: "); Serial.println(deltaZ);
-
+*/
     // Check if any delta exceeds the collision threshold
     if (deltaX > collisionThreshold || deltaY > collisionThreshold || deltaZ > collisionThreshold) {
       Serial.println("Collision detected!");

@@ -30,6 +30,8 @@ class BluetoothManager(private val context: Context) {
     private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null
     private var coroutineScope = CoroutineScope(Dispatchers.IO + Job())
+    private var listenJob: Job? = null
+    private var isDisconnecting = false
 
     companion object {
         private const val DEVICE_NAME = "HelmetIQ"
@@ -54,6 +56,7 @@ class BluetoothManager(private val context: Context) {
                 Toast.makeText(context, "Please enable Bluetooth", Toast.LENGTH_SHORT).show()
                 return
             }
+            cleanupConnection()
 
             // Get paired devices
             val pairedDevices = bluetoothAdapter.bondedDevices
@@ -77,21 +80,12 @@ class BluetoothManager(private val context: Context) {
     private fun connectToDevice(device: BluetoothDevice, onConnected: () -> Unit) {
         coroutineScope.launch {
             try {
-                // Clean up any existing connection
-                cleanupConnection()
-
-                // Create new socket
                 val socket = createBluetoothSocket(device)
                 if (socket == null) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Failed to create Bluetooth socket", Toast.LENGTH_SHORT).show()
                     }
                     return@launch
-                }
-
-                // Attempt to connect with retry logic
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Attempting to connect...", Toast.LENGTH_SHORT).show()
                 }
 
                 val connected = connectWithRetry(socket, MAX_RETRY_ATTEMPTS)
@@ -103,7 +97,6 @@ class BluetoothManager(private val context: Context) {
                     return@launch
                 }
 
-                // Connection successful, setup streams
                 bluetoothSocket = socket
                 inputStream = socket.inputStream
                 outputStream = socket.outputStream
@@ -112,11 +105,6 @@ class BluetoothManager(private val context: Context) {
                     Toast.makeText(context, "Connected to HelmetIQ", Toast.LENGTH_SHORT).show()
                     onConnected()
                 }
-            } catch (e: SecurityException) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Bluetooth permission denied", Toast.LENGTH_SHORT).show()
-                }
-                Log.e("BluetoothManager", "Security Exception", e)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Connection error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -187,65 +175,117 @@ class BluetoothManager(private val context: Context) {
     }
 
     private fun cleanupConnection() {
+        isDisconnecting = true
         try {
+            listenJob?.cancel()
+            listenJob = null
+
+            outputStream?.flush()
+            outputStream?.close()
+            inputStream?.close()
             bluetoothSocket?.close()
         } catch (e: IOException) {
             Log.e("BluetoothManager", "Error closing socket during cleanup", e)
+        } finally {
+            bluetoothSocket = null
+            inputStream = null
+            outputStream = null
+            isDisconnecting = false
         }
-        bluetoothSocket = null
-        inputStream = null
-        outputStream = null
     }
 
     fun disconnect() {
         try {
+            isDisconnecting = true
             cleanupConnection()
             coroutineScope.cancel()
+            coroutineScope = CoroutineScope(Dispatchers.IO + Job())
             Toast.makeText(context, "Disconnected from HelmetIQ", Toast.LENGTH_SHORT).show()
         } catch (e: IOException) {
             Toast.makeText(context, "Error disconnecting: ${e.message}", Toast.LENGTH_SHORT).show()
             Log.e("BluetoothManager", "Could not close the client socket", e)
+        } finally {
+            isDisconnecting = false
         }
     }
 
-    // Add necessary imports at the top of the file
     fun listenForData(onDataReceived: (String) -> Unit) {
         if (!hasBluetoothPermission()) {
             Toast.makeText(context, "Bluetooth permission required to receive data", Toast.LENGTH_SHORT).show()
             return
         }
 
-        coroutineScope.launch {
-            val buffer = ByteArray(1024)
-            var bytes: Int
+        listenJob?.cancel()
 
-            while (true) {
+        listenJob = coroutineScope.launch {
+            val buffer = ByteArray(1024)
+
+            while (isActive && !isDisconnecting) {
                 try {
-                    bytes = inputStream?.read(buffer) ?: break
-                    val readMessage = String(buffer, 0, bytes)
-                    withContext(Dispatchers.Main) {
-                        onDataReceived(readMessage)
+                    if (bluetoothSocket?.isConnected == true && inputStream != null) {
+                        val bytes = inputStream?.read(buffer) ?: -1
+                        if (bytes > 0) {
+                            val readMessage = String(buffer, 0, bytes)
+                            withContext(Dispatchers.Main) {
+                                onDataReceived(readMessage)
+                            }
+                        } else if (bytes == -1) {
+                            if (!isDisconnecting) {
+                                handleConnectionError()
+                            }
+                            break
+                        }
+                    } else {
+                        delay(100) // Small delay to prevent busy waiting
                     }
                 } catch (e: IOException) {
                     Log.e("BluetoothManager", "Input stream was disconnected", e)
+                    if (!isDisconnecting) {
+                        handleConnectionError()
+                    }
                     break
                 }
             }
         }
     }
 
+
     fun sendData(data: String) {
         if (!hasBluetoothPermission()) {
-            Toast.makeText(context, "Bluetooth permission required to send data", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "Bluetooth permission required to send data",
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
 
         coroutineScope.launch {
             try {
-                outputStream?.write(data.toByteArray())
+                if (bluetoothSocket?.isConnected == true && outputStream != null) {
+                    outputStream?.write(data.toByteArray())
+                    outputStream?.flush()
+                } else {
+                    Log.e(
+                        "BluetoothManager",
+                        "Cannot send data - socket is not connected or stream is null"
+                    )
+                }
             } catch (e: IOException) {
                 Log.e("BluetoothManager", "Error occurred when sending data", e)
+                if (!isDisconnecting) {
+                    handleConnectionError()
+                }
             }
+        }
+    }
+
+    private fun handleConnectionError() {
+        coroutineScope.launch(Dispatchers.Main) {
+            Toast.makeText(context, "Connection lost. Attempting to reconnect...", Toast.LENGTH_SHORT).show()
+            cleanupConnection()
+            // Attempt to reconnect
+            initializeBluetooth {}
         }
     }
 }

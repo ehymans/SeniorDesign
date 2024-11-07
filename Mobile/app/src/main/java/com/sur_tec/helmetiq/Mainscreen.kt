@@ -144,6 +144,8 @@ fun Mainscreen(
             smsPermissionState.launchPermissionRequest()
         }
 
+        /*
+        // removed 11/6/24 ---> function that automatically initalizes bluetooth.
         // Initialize Bluetooth if permissions are granted
         if (bluetoothPermissionState.allPermissionsGranted)
         {
@@ -153,7 +155,7 @@ fun Mainscreen(
                     Log.d("Bluetooth", "Connected to device")
                 }
             }
-        }
+        }*/
     }
 
     // Function to initiate sending emergency SMS
@@ -181,6 +183,8 @@ fun Mainscreen(
     }
 
 
+    /*
+    // 11/6/24 removed the launched effect that auto init. Bluetooth.
     // Initialize Bluetooth
     LaunchedEffect(Unit) {
         if (!isConnected) {
@@ -192,7 +196,7 @@ fun Mainscreen(
                 bluetoothPermissionState.launchMultiplePermissionRequest()
             }
         }
-    }
+    }*/
 
     // Observe Bluetooth events for collision detection
     LaunchedEffect(Unit) {
@@ -265,7 +269,38 @@ fun Mainscreen(
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(40.dp)
                 )
+                // Update the Bluetooth icon click handler
                 Icon(
+                    painter = painterResource(id = R.drawable.ic_bluetooth),
+                    contentDescription = "Bluetooth",
+                    tint = if (isConnected) MaterialTheme.colorScheme.primary else Color.Gray,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = {
+                                if (bluetoothPermissionState.allPermissionsGranted) {
+                                    if (!isConnected) {
+                                        bluetoothViewModel.connectBluetooth {
+                                            Log.d("Bluetooth", "Connected to device")
+                                        }
+                                    } else {
+                                        bluetoothViewModel.disconnectBluetooth()
+                                        Log.d("Bluetooth", "Disconnected")
+                                    }
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Bluetooth permissions required",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    bluetoothPermissionState.launchMultiplePermissionRequest()
+                                }
+                            }
+                        )
+                )
+                /*Icon(
                     painter = painterResource(id = R.drawable.ic_bluetooth),
                     contentDescription = "Bluetooth",
                     tint = if (isConnected) MaterialTheme.colorScheme.primary else Color.Gray,
@@ -304,7 +339,7 @@ fun Mainscreen(
                                 }
                             }
                         )
-                )
+                )*/
             }
             Spacer(modifier = Modifier.height(8.dp))
 

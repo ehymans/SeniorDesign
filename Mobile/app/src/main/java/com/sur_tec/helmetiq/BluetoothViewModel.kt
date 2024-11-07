@@ -13,10 +13,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
 class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
-    // Instance of BluetoothManager
     val bluetoothManager = BluetoothManager(application.applicationContext)
 
-    // StateFlow for connection status
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
 
@@ -28,27 +26,29 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     private val _eventFlow = MutableSharedFlow<BluetoothEvent>()
     val eventFlow = _eventFlow.asSharedFlow()
 
-    // Function to update the connection status
+    // Remove automatic initialization
+    private var isBluetoothInitialized = false
+
     fun updateConnectionStatus(status: Boolean) {
         _isConnected.value = status
     }
 
-    private var isBluetoothInitialized = false
-
-    @OptIn(ExperimentalPermissionsApi::class)
-    fun initializeBluetooth(
-        onConnected: () -> Unit
-    ) {
-        // Remove the initialization check since we want to allow reconnection
+    // Function to explicitly connect when button is pressed
+    fun connectBluetooth(onConnected: () -> Unit) {
         bluetoothManager.initializeBluetooth {
-            // On connected
             updateConnectionStatus(true)
             listenForData()
             onConnected()
         }
     }
 
-    // Updated for collision flag
+    fun disconnectBluetooth() {
+        bluetoothManager.disconnect()
+        updateConnectionStatus(false)
+        isBluetoothInitialized = false
+    }
+
+    // function that listens to receive the collision string sent from the ESP32
     private fun listenForData() {
         bluetoothManager.listenForData { data ->
             if (data.trim() == "69") {
@@ -58,7 +58,10 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
     }
+}
 
+/*
+// unneeded function from when some Bluetooth things were handling SMS functionality
     fun sendEmergencySms(userName: String, location: String, onSmsSent: (Boolean) -> Unit) {
         viewModelScope.launch {
             val context = getApplication<Application>().applicationContext
@@ -67,10 +70,4 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             onSmsSent(result)
         }
     }
-
-    fun disconnectBluetooth() {
-        bluetoothManager.disconnect()
-        updateConnectionStatus(false)
-        isBluetoothInitialized = false
-    }
-}
+ */

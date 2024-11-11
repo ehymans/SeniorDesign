@@ -317,7 +317,7 @@ void handleHeadlightAndTailLight(void *param) {
       Serial.println(lux);
 
       // Set a threshold for low light to turn on the headlight and tail light
-      if (lux < 70.0 && isHeadlightOn) {
+      if (lux < 20.0 && isHeadlightOn) {
         // Adjust threshold as needed and check Bluetooth override
         digitalWrite(headlightPin, HIGH);   // Turn on headlight
         digitalWrite(taillightPin, HIGH);   // Turn on tail light
@@ -486,4 +486,4 @@ void handleBluetooth(void *param) {
     // Delay to prevent overwhelming the Bluetooth communication
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
-}}
+}

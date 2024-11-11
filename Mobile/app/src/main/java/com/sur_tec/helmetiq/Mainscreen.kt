@@ -88,6 +88,10 @@ fun Mainscreen(
     val context = LocalContext.current
     val isConnected by bluetoothViewModel.isConnected.collectAsState()
 
+    // STATISTICS
+    val totalRideTime by bluetoothViewModel.totalRideTime.collectAsState()
+    val totalDistance by bluetoothViewModel.totalDistance.collectAsState()
+
     // Permission states
     val smsPermissionState = rememberPermissionState(permission = Manifest.permission.SEND_SMS)
     val bluetoothPermissionState = rememberMultiplePermissionsState(
@@ -399,42 +403,10 @@ fun Mainscreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            MaterialTheme.colorScheme.primary
-                        )
-                ) {
-                    Text(
-                        text = "Total Distance Traveled: N/A",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            MaterialTheme.colorScheme.primary
-                        )
-                ) {
-                    Text(
-                        text = "Ride Time: N/A",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                StatisticsSection(
+                    totalDistance = totalDistance,
+                    totalRideTime = totalRideTime
+                )
             }
         }
     }
@@ -469,6 +441,65 @@ fun Mainscreen(
             }
         )
     }
+}
+
+@Composable
+private fun StatisticsSection(
+    totalDistance: Float,
+    totalRideTime: Long,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.padding(top = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        ) {
+            Text(
+                text = "Total Distance: ${formatDistance(totalDistance)}",
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        ) {
+            Text(
+                text = "Total Ride Time: ${formatTime(totalRideTime)}",
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+    }
+}
+
+private fun formatDistance(meters: Float): String {
+    return when {
+        meters < 1000 -> "${meters.toInt()}m"
+        else -> String.format("%.2fkm", meters / 1000)
+    }
+}
+
+private fun formatTime(seconds: Long): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val secs = seconds % 60
+    return String.format("%02d:%02d:%02d", hours, minutes, secs)
 }
 
 @SuppressLint("MissingPermission")

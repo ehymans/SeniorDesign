@@ -174,18 +174,37 @@ class BluetoothManager(private val context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
+    // BluetoothManager.kt
     private fun cleanupConnection() {
         isDisconnecting = true
         try {
             listenJob?.cancel()
             listenJob = null
 
-            outputStream?.flush()
-            outputStream?.close()
-            inputStream?.close()
-            bluetoothSocket?.close()
-        } catch (e: IOException) {
-            Log.e("BluetoothManager", "Error closing socket during cleanup", e)
+            outputStream?.let {
+                try {
+                    it.flush()
+                    it.close()
+                } catch (e: IOException) {
+                    Log.e("BluetoothManager", "Error closing output stream", e)
+                }
+            }
+
+            inputStream?.let {
+                try {
+                    it.close()
+                } catch (e: IOException) {
+                    Log.e("BluetoothManager", "Error closing input stream", e)
+                }
+            }
+
+            bluetoothSocket?.let {
+                try {
+                    it.close()
+                } catch (e: IOException) {
+                    Log.e("BluetoothManager", "Error closing socket", e)
+                }
+            }
         } finally {
             bluetoothSocket = null
             inputStream = null
@@ -209,12 +228,14 @@ class BluetoothManager(private val context: Context) {
         }
     }
 
+    // BluetoothManager.kt
     fun listenForData(onDataReceived: (String) -> Unit) {
         if (!hasBluetoothPermission()) {
             Toast.makeText(context, "Bluetooth permission required to receive data", Toast.LENGTH_SHORT).show()
             return
         }
 
+        // Cancel any existing listening job
         listenJob?.cancel()
 
         listenJob = coroutineScope.launch {
@@ -227,6 +248,7 @@ class BluetoothManager(private val context: Context) {
                         if (bytes > 0) {
                             val readMessage = String(buffer, 0, bytes)
                             withContext(Dispatchers.Main) {
+                                Log.d("BluetoothManager", "Received data: $readMessage")
                                 onDataReceived(readMessage)
                             }
                         } else if (bytes == -1) {
@@ -236,7 +258,7 @@ class BluetoothManager(private val context: Context) {
                             break
                         }
                     } else {
-                        delay(100) // Small delay to prevent busy waiting
+                        delay(100)
                     }
                 } catch (e: IOException) {
                     Log.e("BluetoothManager", "Input stream was disconnected", e)
@@ -248,7 +270,6 @@ class BluetoothManager(private val context: Context) {
             }
         }
     }
-
 
     fun sendData(data: String) {
         if (!hasBluetoothPermission()) {

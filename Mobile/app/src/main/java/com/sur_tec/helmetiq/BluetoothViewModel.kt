@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.location.Location
 import android.os.Looper
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -28,6 +29,8 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
+
+    private var isListening = false
 
     // RIDE METRICS
     private val _totalRideTime = MutableStateFlow(0L) // in seconds
@@ -64,22 +67,50 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // New function to set up collision detection
+    private fun setupCollisionDetection() {
+        viewModelScope.launch {
+            try {
+                bluetoothManager.listenForData { data ->
+                    if (data.trim() == "69") {
+                        viewModelScope.launch {
+                            _eventFlow.emit(BluetoothEvent.CollisionDetected)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("BluetoothViewModel", "Error setting up collision detection", e)
+            }
+        }
+    }
+
     // Function to explicitly connect when button is pressed
     fun connectBluetooth(onConnected: () -> Unit) {
         bluetoothManager.initializeBluetooth {
             updateConnectionStatus(true)
-            listenForData()
+            //listenForData()
+            //startListening()
+            setupCollisionDetection()
             //startTracking()
             onConnected()
         }
     }
 
+    // Add this helper function
+    private fun startListening() {
+        if (!isListening) {
+            isListening = true
+            listenForData()
+        }
+    }
 
     // added a cleanup function 11/11/24
     private fun cleanup() {
         updateConnectionStatus(false)
         stopTracking()
+        bluetoothManager.stopListening()
         // Cancel any existing coroutines or jobs if necessary
+        isListening = false
     }
 
     fun disconnectBluetooth() {

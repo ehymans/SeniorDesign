@@ -268,12 +268,24 @@ fun Mainscreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_battery),
-                    contentDescription = "Battery",
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(40.dp)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        //painter = painterResource(id = R.drawable.ic_battery),
+                        painter = painterResource(id = R.drawable.ic_battery_plain),
+                        contentDescription = "Battery",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Text(
+                        text = "95%",
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
                 // Update the Bluetooth icon click handler
                 Icon(
                     painter = painterResource(id = R.drawable.ic_bluetooth),

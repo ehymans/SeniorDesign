@@ -33,6 +33,11 @@ class BluetoothManager(private val context: Context) {
     private var listenJob: Job? = null
     private var isDisconnecting = false
 
+    private var lastDataListener: ((String) -> Unit)? = null
+
+    private var isListening = false
+    private var currentListener: ((String) -> Unit)? = null
+
     companion object {
         private const val DEVICE_NAME = "HelmetIQ"
         private val UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
@@ -71,7 +76,9 @@ class BluetoothManager(private val context: Context) {
         } catch (e: SecurityException) {
             Toast.makeText(context, "Bluetooth permission denied", Toast.LENGTH_SHORT).show()
             Log.e("BluetoothManager", "Security Exception", e)
-        } catch (e: Exception) {
+        }
+        catch (e: Exception)
+        {
             Toast.makeText(context, "Bluetooth initialization error: ${e.message}", Toast.LENGTH_SHORT).show()
             Log.e("BluetoothManager", "Initialization error", e)
         }
@@ -174,12 +181,10 @@ class BluetoothManager(private val context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    // BluetoothManager.kt
     private fun cleanupConnection() {
         isDisconnecting = true
         try {
-            listenJob?.cancel()
-            listenJob = null
+            stopListening()
 
             outputStream?.let {
                 try {
@@ -213,6 +218,7 @@ class BluetoothManager(private val context: Context) {
         }
     }
 
+
     fun disconnect() {
         try {
             isDisconnecting = true
@@ -228,12 +234,22 @@ class BluetoothManager(private val context: Context) {
         }
     }
 
-    // BluetoothManager.kt
+    // Add function to stop listening
+    fun stopListening() {
+        isListening = false
+        currentListener = null
+        listenJob?.cancel()
+        listenJob = null
+    }
+
     fun listenForData(onDataReceived: (String) -> Unit) {
         if (!hasBluetoothPermission()) {
             Toast.makeText(context, "Bluetooth permission required to receive data", Toast.LENGTH_SHORT).show()
             return
         }
+
+        currentListener = onDataReceived
+        isListening = true
 
         // Cancel any existing listening job
         listenJob?.cancel()
@@ -241,7 +257,7 @@ class BluetoothManager(private val context: Context) {
         listenJob = coroutineScope.launch {
             val buffer = ByteArray(1024)
 
-            while (isActive && !isDisconnecting) {
+            while (isActive && isListening && !isDisconnecting) {
                 try {
                     if (bluetoothSocket?.isConnected == true && inputStream != null) {
                         val bytes = inputStream?.read(buffer) ?: -1
@@ -249,7 +265,7 @@ class BluetoothManager(private val context: Context) {
                             val readMessage = String(buffer, 0, bytes)
                             withContext(Dispatchers.Main) {
                                 Log.d("BluetoothManager", "Received data: $readMessage")
-                                onDataReceived(readMessage)
+                                currentListener?.invoke(readMessage)
                             }
                         } else if (bytes == -1) {
                             if (!isDisconnecting) {
@@ -303,10 +319,19 @@ class BluetoothManager(private val context: Context) {
 
     private fun handleConnectionError() {
         coroutineScope.launch(Dispatchers.Main) {
-            Toast.makeText(context, "Connection lost. Attempting to reconnect...", Toast.LENGTH_SHORT).show()
-            cleanupConnection()
-            // Attempt to reconnect
-            initializeBluetooth {}
+            if (!isDisconnecting) {
+                Toast.makeText(context, "Connection lost. Attempting to reconnect...", Toast.LENGTH_SHORT).show()
+                val previousListener = currentListener
+                cleanupConnection()
+
+                // Attempt to reconnect with proper callback
+                initializeBluetooth {
+                    // Re-establish data listening
+                    previousListener?.let { listener ->
+                        listenForData(listener)
+                    }
+                }
+            }
         }
     }
 }
